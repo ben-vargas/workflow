@@ -457,6 +457,88 @@ describe('streamer', () => {
         const content = chunks.join('');
         expect(content).toBe('0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n');
       });
+
+      it('should handle runId as a promise and flush correctly when promise resolves', async () => {
+        const { streamer } = await setupStreamer();
+        const streamName = 'promise-runid-test';
+
+        // Create a promise that we'll resolve later
+        let resolveRunId: (value: string) => void = () => {};
+        const runIdPromise = new Promise<string>((resolve) => {
+          resolveRunId = resolve;
+        });
+
+        // Write chunks with the promise (before it's resolved)
+        const writePromise1 = streamer.writeToStream(
+          streamName,
+          runIdPromise,
+          'chunk1\n'
+        );
+        const writePromise2 = streamer.writeToStream(
+          streamName,
+          runIdPromise,
+          'chunk2\n'
+        );
+
+        // Verify that writes are pending (not yet flushed)
+        let writes1Complete = false;
+        let writes2Complete = false;
+        writePromise1.then(() => {
+          writes1Complete = true;
+        });
+        writePromise2.then(() => {
+          writes2Complete = true;
+        });
+
+        // Give a small delay to ensure writes are initiated but blocked
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        // At this point, writes should be pending
+        expect(writes1Complete).toBe(false);
+        expect(writes2Complete).toBe(false);
+
+        // Now resolve the runId promise
+        resolveRunId(TEST_RUN_ID);
+
+        // Wait for writes to complete
+        await writePromise1;
+        await writePromise2;
+
+        expect(writes1Complete).toBe(true);
+        expect(writes2Complete).toBe(true);
+
+        // Close the stream with another promise
+        let resolveCloseRunId: (value: string) => void = () => {};
+        const closeRunIdPromise = new Promise<string>((resolve) => {
+          resolveCloseRunId = resolve;
+        });
+
+        const closePromise = streamer.closeStream(
+          streamName,
+          closeRunIdPromise
+        );
+
+        // Resolve the close promise
+        resolveCloseRunId(TEST_RUN_ID);
+        await closePromise;
+
+        // Now read and verify all chunks were written correctly
+        const stream = await streamer.readFromStream(streamName);
+        const reader = stream.getReader();
+        const chunks: string[] = [];
+
+        let done = false;
+        while (!done) {
+          const result = await reader.read();
+          done = result.done;
+          if (result.value) {
+            chunks.push(Buffer.from(result.value).toString());
+          }
+        }
+
+        const content = chunks.join('');
+        expect(content).toBe('chunk1\nchunk2\n');
+      });
     });
   });
 });
