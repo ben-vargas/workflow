@@ -1,4 +1,5 @@
 import type {
+  LanguageModelV2,
   LanguageModelV2ToolCall,
   LanguageModelV2ToolResultPart,
 } from '@ai-sdk/provider';
@@ -17,17 +18,19 @@ import { streamTextIterator } from './stream-text-iterator.js';
  */
 export interface DurableAgentOptions {
   /**
-   * The model identifier to use for the agent.
-   * This should be a string compatible with the AI SDK (e.g., 'anthropic/claude-opus').
+   * The model provider to use for the agent.
+   *
+   * This should be a string compatible with the Vercel AI Gateway (e.g., 'anthropic/claude-opus'),
+   * or a step function that returns a `LanguageModelV2` instance.
    */
-  model: string;
+  model: string | (() => Promise<LanguageModelV2>);
 
   /**
    * A set of tools available to the agent.
    * Tools can be implemented as workflow steps for automatic retries and persistence,
    * or as regular workflow-level logic using core library features like sleep() and Hooks.
    */
-  tools: ToolSet;
+  tools?: ToolSet;
 
   /**
    * Optional system prompt to guide the agent's behavior.
@@ -89,13 +92,13 @@ export interface DurableAgentStreamOptions {
  * ```
  */
 export class DurableAgent {
-  private model: string;
+  private model: string | (() => Promise<LanguageModelV2>);
   private tools: ToolSet;
   private system?: string;
 
   constructor(options: DurableAgentOptions) {
     this.model = options.model;
-    this.tools = options.tools;
+    this.tools = options.tools ?? {};
     this.system = options.system;
   }
 
@@ -118,8 +121,6 @@ export class DurableAgent {
     const writable = options.writable || getWritable();
 
     const iterator = streamTextIterator({
-      // TODO: Figure out serialization on the `model` instance.
-      // For now we'll just support the string -> AI Gateway interface.
       model: this.model,
       tools: this.tools,
       writable,
