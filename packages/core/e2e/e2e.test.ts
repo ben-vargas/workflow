@@ -737,4 +737,46 @@ describe('e2e', () => {
       expect(stepCompletedEvents).toHaveLength(1);
     }
   );
+
+  test(
+    'streamInputOutputWorkflow - pass stream as input, transform it, and return as output',
+    { timeout: 60_000 },
+    async () => {
+      // Create a ReadableStream with test data
+      const encoder = new TextEncoder();
+      const testData = ['hello ', 'world', '!'];
+      let chunkIndex = 0;
+
+      const inputStream = new ReadableStream({
+        pull(controller) {
+          if (chunkIndex < testData.length) {
+            controller.enqueue(encoder.encode(testData[chunkIndex]));
+            chunkIndex++;
+          } else {
+            controller.close();
+          }
+        },
+      });
+
+      // Trigger the workflow with the stream as input
+      const run = await triggerWorkflow('streamInputOutputWorkflow', [
+        inputStream,
+      ]);
+
+      // Get the return value, which should be a transformed stream
+      const returnValue = await getWorkflowReturnValue(run.runId);
+      expect(returnValue).toBeInstanceOf(ReadableStream);
+
+      // Read the stream and verify it contains the uppercased content
+      const decoder = new TextDecoder();
+      let contents = '';
+      for await (const chunk of returnValue) {
+        const text = decoder.decode(chunk, { stream: true });
+        contents += text;
+      }
+
+      // The workflow transforms the input to uppercase
+      expect(contents).toBe('HELLO WORLD!');
+    }
+  );
 });

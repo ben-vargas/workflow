@@ -512,3 +512,40 @@ async function doubleNumber(x: number) {
   'use step';
   return x * 2;
 }
+
+//////////////////////////////////////////////////////////
+
+async function transformStreamInStep(stream: ReadableStream<Uint8Array>) {
+  'use step';
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      const reader = stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          // Decode the chunk, transform it to uppercase, and encode it back
+          const text = decoder.decode(value, { stream: true });
+          const transformed = text.toUpperCase();
+          controller.enqueue(encoder.encode(transformed));
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      } finally {
+        reader.releaseLock();
+      }
+    },
+  });
+}
+
+export async function streamInputOutputWorkflow(inputStream: ReadableStream) {
+  'use workflow';
+  // Take a stream as input, transform it in a step, and return the transformed stream
+  const transformedStream = await transformStreamInStep(inputStream);
+  return transformedStream;
+}
