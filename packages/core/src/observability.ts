@@ -48,18 +48,42 @@ const hydrateStepIO = <
 >(
   step: T
 ): T => {
+  // Handle both old format (array) and new format (object with args and closureVars)
+  let hydratedInput = step.input;
+
+  if (step.input) {
+    if (Array.isArray(step.input) && step.input.length) {
+      // Old format: input is an array of arguments
+      hydratedInput = hydrateStepArguments(
+        step.input,
+        [],
+        step.runId as string,
+        globalThis,
+        streamPrintRevivers
+      );
+    } else if (
+      typeof step.input === 'object' &&
+      'args' in step.input &&
+      Array.isArray(step.input.args) &&
+      step.input.args.length
+    ) {
+      // New format: input is { args: [...], closureVars: {...} }
+      hydratedInput = {
+        ...step.input,
+        args: hydrateStepArguments(
+          step.input.args,
+          [],
+          step.runId as string,
+          globalThis,
+          streamPrintRevivers
+        ),
+      };
+    }
+  }
+
   return {
     ...step,
-    input:
-      step.input && Array.isArray(step.input) && step.input.length
-        ? hydrateStepArguments(
-            step.input,
-            [],
-            step.runId as string,
-            globalThis,
-            streamPrintRevivers
-          )
-        : step.input,
+    input: hydratedInput,
     output: step.output
       ? hydrateStepReturnValue(step.output, globalThis, streamPrintRevivers)
       : step.output,
