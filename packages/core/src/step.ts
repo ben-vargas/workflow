@@ -9,17 +9,23 @@ import { hydrateStepReturnValue } from './serialization.js';
 
 export function createUseStep(ctx: WorkflowOrchestratorContext) {
   return function useStep<Args extends Serializable[], Result>(
-    stepName: string
+    stepName: string,
+    closureVarsFn?: () => Record<string, Serializable>
   ) {
     const stepFunction = (...args: Args): Promise<Result> => {
       const { promise, resolve, reject } = withResolvers<Result>();
 
       const correlationId = `step_${ctx.generateUlid()}`;
+
+      // Invoke the closure variables function to get the closure scope
+      const closureVars = closureVarsFn?.() || {};
+
       ctx.invocationsQueue.push({
         type: 'step',
         correlationId,
         stepName,
         args,
+        closureVars,
       });
 
       // Track whether we've already seen a "step_started" event for this step.

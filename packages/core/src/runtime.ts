@@ -389,8 +389,11 @@ export function workflowEntrypoint(workflowCode: string) {
                 if (queueItem.type === 'step') {
                   // Handle step operations
                   const ops: Promise<void>[] = [];
-                  const dehydratedArgs = dehydrateStepArguments(
-                    queueItem.args,
+                  const dehydratedInput = dehydrateStepArguments(
+                    {
+                      args: queueItem.args,
+                      closureVars: queueItem.closureVars,
+                    },
                     err.globalThis
                   );
 
@@ -398,7 +401,7 @@ export function workflowEntrypoint(workflowCode: string) {
                     const step = await world.steps.create(runId, {
                       stepId: queueItem.correlationId,
                       stepName: queueItem.stepName,
-                      input: dehydratedArgs as Serializable[],
+                      input: dehydratedInput as Serializable,
                     });
 
                     waitUntil(Promise.all(ops));
@@ -669,13 +672,40 @@ export const stepEntrypoint =
                 `Step "${stepId}" has no "startedAt" timestamp`
               );
             }
-            // Hydrate the step input arguments
+            // Hydrate the step input arguments and closure variables
             const ops: Promise<void>[] = [];
-            const args = hydrateStepArguments(step.input, ops, workflowRunId);
+            const hydratedInput = hydrateStepArguments(
+              step.input,
+              ops,
+              workflowRunId
+            );
+
+            // Handle both new format { args, closureVars } and legacy format (just args array)
+            let args: any[];
+            let closureVars: Record<string, any>;
+
+            if (
+              hydratedInput &&
+              typeof hydratedInput === 'object' &&
+              'args' in hydratedInput
+            ) {
+              // New format: { args, closureVars }
+              args = hydratedInput.args;
+              closureVars = hydratedInput.closureVars || {};
+            } else {
+              // Legacy format: just args array
+              args = hydratedInput;
+              closureVars = {};
+            }
 
             span?.setAttributes({
               ...Attribute.StepArgumentsCount(args.length),
             });
+
+            // Create the `this` context with closure variables
+            const thisContext = {
+              [Symbol.for('WORKFLOW_CLOSURE')]: closureVars,
+            };
 
             result = await contextStorage.run(
               {
@@ -695,7 +725,7 @@ export const stepEntrypoint =
                 },
                 ops,
               },
-              () => stepFn(...args)
+              () => stepFn.apply(thisContext, args)
             );
 
             result = dehydrateStepReturnValue(result, ops, workflowRunId);

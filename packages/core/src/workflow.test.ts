@@ -811,6 +811,7 @@ describe('runWorkflow', () => {
           stepName: 'add',
           correlationId: 'step_01HK153X008RT6YEW43G8QX6JX',
           args: [1, 2],
+          closureVars: {},
         },
       ]);
     });
@@ -897,12 +898,14 @@ describe('runWorkflow', () => {
           stepName: 'add',
           correlationId: 'step_01HK153X008RT6YEW43G8QX6JX',
           args: [1, 2],
+          closureVars: {},
         },
         {
           type: 'step',
           stepName: 'add',
           correlationId: 'step_01HK153X008RT6YEW43G8QX6JY',
           args: [3, 4],
+          closureVars: {},
         },
       ]);
     });
