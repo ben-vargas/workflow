@@ -1,8 +1,8 @@
-import type { Plugin } from "vite";
-import { SvelteKitBuilder } from "./builder.js";
-import { workflowTransformPlugin } from "@workflow/rollup";
-import { workflowHotUpdatePlugin } from "@workflow/vite";
-import { createBuildQueue } from "@workflow/builders";
+import type { Plugin } from 'vite';
+import { SvelteKitBuilder } from './builder.js';
+import { workflowTransformPlugin } from '@workflow/rollup';
+import { workflowHotUpdatePlugin } from '@workflow/vite';
+import { createBuildQueue } from '@workflow/builders';
 
 export function workflowPlugin(): Plugin[] {
   const builder = new SvelteKitBuilder();
@@ -11,7 +11,7 @@ export function workflowPlugin(): Plugin[] {
   return [
     workflowTransformPlugin() as Plugin,
     {
-      name: "workflow:sveltekit",
+      name: 'workflow:sveltekit',
     },
     workflowHotUpdatePlugin({
       builder,
