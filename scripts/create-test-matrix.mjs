@@ -62,6 +62,12 @@ const DEV_TEST_CONFIGS = {
     apiFileImportPath: '../..',
     workflowsDir: 'src/workflows',
   },
+  tanstack: {
+    generatedStepPath: 'src/routes/[.]well-known/workflow/v1/step.ts',
+    generatedWorkflowPath: 'src/routes/[.]well-known/workflow/v1/flow.ts',
+    apiFilePath: 'src/routes/api/chat.ts',
+    apiFileImportPath: '..',
+  },
 };
 
 const matrix = {
@@ -135,6 +141,12 @@ matrix.app.push({
   name: 'astro',
   project: 'workbench-astro-workflow',
   ...DEV_TEST_CONFIGS.astro,
+});
+
+matrix.app.push({
+  name: 'tanstack',
+  project: 'workbench-tanstack-workflow',
+  ...DEV_TEST_CONFIGS.tanstack,
 });
 
 console.log(JSON.stringify(matrix));
