@@ -214,7 +214,8 @@ export function HooksTable({
   return (
     <div>
       <div className="flex items-center justify-between">
-        <div className="flex items-center justify-between">
+        <div className="flex items-end gap-2">
+          <p className="text-sm text-muted-foreground">Last refreshed</p>
           {lastRefreshTime && (
             <RelativeTime
               date={lastRefreshTime}
@@ -260,11 +261,11 @@ export function HooksTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Hook ID</TableHead>
-                <TableHead>Run ID</TableHead>
-                <TableHead>Token</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Invocations</TableHead>
+                <TableHead className="h-10">Hook ID</TableHead>
+                <TableHead className="h-10">Run ID</TableHead>
+                <TableHead className="h-10">Token</TableHead>
+                <TableHead className="h-10">Created</TableHead>
+                <TableHead className="h-10">Invocations</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -275,23 +276,25 @@ export function HooksTable({
                   onClick={() => onHookClick(hook.hookId, hook.runId)}
                   data-selected={hook.hookId === selectedHookId}
                 >
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="font-mono text-xs py-2">
                     {hook.hookId}
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="font-mono text-xs py-2">
                     {hook.runId}
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="font-mono text-xs py-2">
                     {hook.token.substring(0, 12)}...
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-2">
                     {hook.createdAt ? (
                       <RelativeTime date={hook.createdAt} />
                     ) : (
                       '-'
                     )}
                   </TableCell>
-                  <TableCell>{renderInvocationCount(hook)}</TableCell>
+                  <TableCell className="py-2">
+                    {renderInvocationCount(hook)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

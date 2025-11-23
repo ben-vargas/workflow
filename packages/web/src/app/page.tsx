@@ -18,10 +18,17 @@ export default function Home() {
 
   const handleRunClick = (runId: string, streamId?: string) => {
     if (!streamId) {
-      router.push(buildUrlWithConfig(`/run/${runId}`, config));
+      router.push(
+        buildUrlWithConfig(`/run/${runId}`, config, undefined, searchParams)
+      );
     } else {
       router.push(
-        buildUrlWithConfig(`/run/${runId}/streams/${streamId}`, config)
+        buildUrlWithConfig(
+          `/run/${runId}/streams/${streamId}`,
+          config,
+          undefined,
+          searchParams
+        )
       );
     }
   };
@@ -29,13 +36,20 @@ export default function Home() {
   const handleHookSelect = (hookId: string, runId?: string) => {
     if (hookId) {
       router.push(
-        buildUrlWithConfig(`/run/${runId}`, config, {
-          sidebar: 'hook',
-          hookId,
-        })
+        buildUrlWithConfig(
+          `/run/${runId}`,
+          config,
+          {
+            sidebar: 'hook',
+            hookId,
+          },
+          searchParams
+        )
       );
     } else {
-      router.push(buildUrlWithConfig(`/run/${runId}`, config));
+      router.push(
+        buildUrlWithConfig(`/run/${runId}`, config, undefined, searchParams)
+      );
     }
   };
 

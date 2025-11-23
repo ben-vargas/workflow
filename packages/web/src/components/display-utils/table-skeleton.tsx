@@ -15,10 +15,10 @@ export function TableSkeleton({
   return (
     <div className="w-full">
       <div className="space-y-3" style={{ minHeight: '512px' }}>
-        <Skeleton className="h-[40px] p-1 w-full" />
+        <Skeleton className="h-10 p-1 w-full" />
         <div className="border-b border-gray-alpha-400 w-full"></div>
         {Array.from({ length: rows }, (_, i) => (
-          <div key={`skeleton-row-${i}`} className="flex gap-4 py-3">
+          <div key={`skeleton-row-${i}`} className="flex gap-4 py-2">
             <Skeleton className="h-4 w-1/4" />
             <Skeleton className="h-4 w-1/4" />
             <Skeleton className="h-4 w-1/6" />

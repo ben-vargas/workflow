@@ -6,6 +6,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 interface StatusBadgeProps {
   status: WorkflowRun['status'] | Step['status'];
@@ -17,19 +18,19 @@ export function StatusBadge({ status, context, className }: StatusBadgeProps) {
   const getStatusClasses = () => {
     switch (status) {
       case 'running':
-        return 'text-blue-600 dark:text-blue-400';
+        return 'text-blue-600 dark:text-blue-600 font-semibold';
       case 'completed':
-        return 'text-green-600 dark:text-green-400';
+        return 'text-green-600 dark:text-green-600 font-semibold';
       case 'failed':
-        return 'text-red-600 dark:text-red-400';
+        return 'text-red-600 dark:text-red-600 font-semibold';
       case 'cancelled':
-        return 'text-yellow-600 dark:text-yellow-400';
+        return 'text-yellow-600 dark:text-yellow-600 font-semibold';
       case 'pending':
-        return 'text-gray-600 dark:text-gray-400';
+        return 'text-gray-600 dark:text-gray-600 font-semibold';
       case 'paused':
-        return 'text-orange-600 dark:text-orange-400';
+        return 'text-orange-600 dark:text-orange-600 font-semibold';
       default:
-        return 'text-gray-500 dark:text-gray-400';
+        return 'text-gray-600 dark:text-gray-600 font-semibold';
     }
   };
 
@@ -46,7 +47,11 @@ export function StatusBadge({ status, context, className }: StatusBadgeProps) {
       <Tooltip>
         <TooltipTrigger asChild>
           <span
-            className={`${className} border-b border-dotted cursor-help ${getStatusClasses()}`}
+            className={cn(
+              'border-b border-dotted cursor-help',
+              getStatusClasses(),
+              className
+            )}
           >
             {status}
           </span>
@@ -60,5 +65,5 @@ export function StatusBadge({ status, context, className }: StatusBadgeProps) {
     );
   }
 
-  return <span className={`${className} ${getStatusClasses()}`}>{status}</span>;
+  return <span className={cn(getStatusClasses(), className)}>{status}</span>;
 }

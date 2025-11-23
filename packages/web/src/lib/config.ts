@@ -114,9 +114,18 @@ export function getConfigParams(config: WorldConfig): URLSearchParams {
 export function buildUrlWithConfig(
   path: string,
   config: WorldConfig,
-  additionalParams?: Record<string, string>
+  additionalParams?: Record<string, string>,
+  currentSearchParams?: URLSearchParams
 ): string {
   const params = getConfigParams(config);
+
+  // Preserve theme parameter from current URL if present
+  if (currentSearchParams) {
+    const theme = currentSearchParams.get('theme');
+    if (theme) {
+      params.set('theme', theme);
+    }
+  }
 
   // Add additional params
   if (additionalParams) {

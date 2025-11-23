@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
 import { useEffect } from 'react';
 import { ConnectionStatus } from '@/components/display-utils/connection-status';
-import { SettingsSidebar } from '@/components/settings-sidebar';
+import { SettingsDropdown } from '@/components/settings-dropdown';
 import { Toaster } from '@/components/ui/sonner';
 import { buildUrlWithConfig, useQueryParamConfig } from '@/lib/config';
 import { Logo } from '../icons/logo';
@@ -49,19 +49,34 @@ export function LayoutClient({ children }: LayoutClientProps) {
         let targetUrl: string;
         if (stepId) {
           // Open run with step sidebar
-          targetUrl = buildUrlWithConfig(`/run/${runId}`, config, {
-            sidebar: 'step',
-            stepId,
-          });
+          targetUrl = buildUrlWithConfig(
+            `/run/${runId}`,
+            config,
+            {
+              sidebar: 'step',
+              stepId,
+            },
+            searchParams
+          );
         } else if (hookId) {
           // Open run with hook sidebar
-          targetUrl = buildUrlWithConfig(`/run/${runId}`, config, {
-            sidebar: 'hook',
-            hookId,
-          });
+          targetUrl = buildUrlWithConfig(
+            `/run/${runId}`,
+            config,
+            {
+              sidebar: 'hook',
+              hookId,
+            },
+            searchParams
+          );
         } else {
           // Just open the run
-          targetUrl = buildUrlWithConfig(`/run/${runId}`, config);
+          targetUrl = buildUrlWithConfig(
+            `/run/${runId}`,
+            config,
+            undefined,
+            searchParams
+          );
         }
         router.push(targetUrl);
         return;
@@ -77,40 +92,70 @@ export function LayoutClient({ children }: LayoutClientProps) {
 
     let targetUrl: string;
     if (resource === 'run') {
-      targetUrl = buildUrlWithConfig(`/run/${id}`, config);
+      targetUrl = buildUrlWithConfig(
+        `/run/${id}`,
+        config,
+        undefined,
+        searchParams
+      );
     } else if (resource === 'step' && runId) {
-      targetUrl = buildUrlWithConfig(`/run/${runId}`, config, {
-        sidebar: 'step',
-        stepId: id,
-      });
+      targetUrl = buildUrlWithConfig(
+        `/run/${runId}`,
+        config,
+        {
+          sidebar: 'step',
+          stepId: id,
+        },
+        searchParams
+      );
     } else if (resource === 'stream' && runId) {
-      targetUrl = buildUrlWithConfig(`/run/${runId}`, config, {
-        sidebar: 'stream',
-        streamId: id,
-      });
+      targetUrl = buildUrlWithConfig(
+        `/run/${runId}`,
+        config,
+        {
+          sidebar: 'stream',
+          streamId: id,
+        },
+        searchParams
+      );
     } else if (resource === 'event' && runId) {
-      targetUrl = buildUrlWithConfig(`/run/${runId}`, config, {
-        sidebar: 'event',
-        eventId: id,
-      });
+      targetUrl = buildUrlWithConfig(
+        `/run/${runId}`,
+        config,
+        {
+          sidebar: 'event',
+          eventId: id,
+        },
+        searchParams
+      );
     } else if (resource === 'hook' && runId) {
-      targetUrl = buildUrlWithConfig(`/run/${runId}`, config, {
-        sidebar: 'hook',
-        hookId: id,
-      });
+      targetUrl = buildUrlWithConfig(
+        `/run/${runId}`,
+        config,
+        {
+          sidebar: 'hook',
+          hookId: id,
+        },
+        searchParams
+      );
     } else if (resource === 'hook' && !runId) {
       // Hook without runId - go to home page with hook sidebar
-      targetUrl = buildUrlWithConfig('/', config, {
-        sidebar: 'hook',
-        hookId: id,
-      });
+      targetUrl = buildUrlWithConfig(
+        '/',
+        config,
+        {
+          sidebar: 'hook',
+          hookId: id,
+        },
+        searchParams
+      );
     } else {
       console.warn(`Can't deep-link to ${resource} ${id}.`);
       return;
     }
 
     router.push(targetUrl);
-  }, [resource, id, runId, stepId, hookId, router, config]);
+  }, [resource, id, runId, stepId, hookId, router, config, searchParams]);
 
   return (
     <ThemeProvider
@@ -134,7 +179,7 @@ export function LayoutClient({ children }: LayoutClientProps) {
                 </Link>
                 <div className="ml-auto flex items-center gap-2">
                   <ConnectionStatus config={config} />
-                  <SettingsSidebar />
+                  <SettingsDropdown />
                 </div>
               </div>
             </div>

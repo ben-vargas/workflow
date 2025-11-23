@@ -21,11 +21,21 @@ import {
   type WorldConfig,
 } from '@/lib/config-world';
 
-export function SettingsSidebar() {
+interface SettingsSidebarProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function SettingsSidebar({
+  open: controlledOpen,
+  onOpenChange,
+}: SettingsSidebarProps = {}) {
   const config = useQueryParamConfig();
   const updateConfig = useUpdateConfigQueryParams();
 
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setIsOpen = onOpenChange || setInternalOpen;
   const [localConfig, setLocalConfig] = useState<WorldConfig>(config);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [isValidating, setIsValidating] = useState(false);
@@ -76,14 +86,16 @@ export function SettingsSidebar() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="p-2 rounded-full hover:bg-accent transition-colors"
-        title="Configuration"
-      >
-        <Settings className="h-6 w-6" />
-      </button>
+      {controlledOpen === undefined && (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="p-2 rounded-full hover:bg-accent transition-colors"
+          title="Configuration"
+        >
+          <Settings className="h-6 w-6" />
+        </button>
+      )}
       {isOpen && (
         <>
           {/* Backdrop */}

@@ -9,7 +9,7 @@ import {
   WorkflowTraceViewer,
 } from '@workflow/web-shared';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -47,6 +47,7 @@ export function RunDetailView({
   selectedId: _selectedId,
 }: RunDetailViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [cancelling, setCancelling] = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -107,7 +108,9 @@ export function RunDetailView({
         description: `Run ID: ${newRunId}`,
       });
       // Navigate to the new run
-      router.push(buildUrlWithConfig(`/run/${newRunId}`, config));
+      router.push(
+        buildUrlWithConfig(`/run/${newRunId}`, config, undefined, searchParams)
+      );
     } catch (err) {
       console.error('Failed to re-run workflow:', err);
       toast.error('Failed to start new run', {
@@ -208,7 +211,9 @@ export function RunDetailView({
         style={{ height: 'calc(100vh - 7rem)' }}
       >
         <div className="flex-none space-y-6">
-          <BackLink href={buildUrlWithConfig('/', config)} />
+          <BackLink
+            href={buildUrlWithConfig('/', config, undefined, searchParams)}
+          />
 
           {/* Run Overview Header */}
           <div className="space-y-4 pb-6 border-b">

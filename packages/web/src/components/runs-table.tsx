@@ -142,7 +142,8 @@ export function RunsTable({ config, onRunClick }: RunsTableProps) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <div className="flex items-end">
+        <div className="flex items-end gap-2">
+          <p className="text-sm text-muted-foreground">Last refreshed</p>
           {lastRefreshTime && (
             <RelativeTime
               date={lastRefreshTime}
@@ -296,11 +297,11 @@ export function RunsTable({ config, onRunClick }: RunsTableProps) {
           <Table className="mt-4">
             <TableHeader>
               <TableRow>
-                <TableHead>Workflow</TableHead>
-                <TableHead>Run ID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead>Completed</TableHead>
+                <TableHead className="h-10">Workflow</TableHead>
+                <TableHead className="h-10">Run ID</TableHead>
+                <TableHead className="h-10">Status</TableHead>
+                <TableHead className="h-10">Started</TableHead>
+                <TableHead className="h-10">Completed</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -310,23 +311,23 @@ export function RunsTable({ config, onRunClick }: RunsTableProps) {
                   className="cursor-pointer group relative"
                   onClick={() => onRunClick(run.runId)}
                 >
-                  <TableCell>
+                  <TableCell className="py-2">
                     {parseWorkflowName(run.workflowName)?.shortName || '?'}
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="font-mono text-xs py-2">
                     {run.runId}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-2">
                     <StatusBadge status={run.status} context={run} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-2">
                     {run.startedAt ? (
                       <RelativeTime date={run.startedAt} />
                     ) : (
                       '-'
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-2">
                     {run.completedAt ? (
                       <RelativeTime date={run.completedAt} />
                     ) : (
