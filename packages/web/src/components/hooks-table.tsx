@@ -8,7 +8,6 @@ import {
 import type { Event, Hook } from '@workflow/world';
 import {
   AlertCircle,
-  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
