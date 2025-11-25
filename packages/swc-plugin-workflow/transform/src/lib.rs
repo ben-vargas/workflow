@@ -2292,13 +2292,6 @@ impl StepTransform {
                     ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl))) => {
                         // Check if all variables in this declaration are unused
                         var_decl.decls.iter().all(|declarator| {
-                            // Don't remove if the initializer contains functions (which might have directives)
-                            if let Some(init) = &declarator.init {
-                                if self.contains_function_expr(init) {
-                                    return false;
-                                }
-                            }
-
                             match &declarator.name {
                                 Pat::Ident(binding) => {
                                     let name = binding.id.sym.to_string();
@@ -2390,20 +2383,6 @@ impl StepTransform {
             if !items_changed && !imports_removed && !imports_modified {
                 break;
             }
-        }
-    }
-
-    // Helper to check if an expression contains a function expression or object with methods
-    fn contains_function_expr(&self, expr: &Expr) -> bool {
-        match expr {
-            Expr::Fn(_) | Expr::Arrow(_) => true,
-            Expr::Object(obj_lit) => {
-                // Check if object contains any method properties
-                obj_lit.props.iter().any(
-                    |prop| matches!(prop, PropOrSpread::Prop(p) if matches!(&**p, Prop::Method(_))),
-                )
-            }
-            _ => false,
         }
     }
 
