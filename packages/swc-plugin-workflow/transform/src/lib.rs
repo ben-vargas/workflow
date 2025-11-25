@@ -2712,6 +2712,11 @@ impl<'a> VisitMut for ComprehensiveUsageCollector<'a> {
         let prev_function = self.current_function.clone();
         self.current_function = Some(fn_name.clone());
 
+        // Visit function parameters (which can contain default values that use other identifiers)
+        for param in &mut fn_decl.function.params {
+            param.visit_mut_with(self);
+        }
+
         // Visit the function content to find used identifiers (but don't mark the function name itself as used)
         if let Some(body) = &mut fn_decl.function.body {
             body.visit_mut_with(self);
