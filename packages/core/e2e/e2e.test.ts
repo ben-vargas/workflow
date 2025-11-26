@@ -785,10 +785,15 @@ describe('e2e', () => {
       // the workflow should be marked as failed, not stuck in running state
       const run = await triggerWorkflow('stepMaxRetriesWorkflow', []);
 
-      // Wait for the workflow to complete (should fail)
-      await waitForRun(run.runId);
+      // Try to get the workflow return value, which should throw/return an error
+      // since the workflow fails
+      const returnValue = await getWorkflowReturnValue(run.runId);
 
-      // Get the workflow run data
+      // The workflow should return a WorkflowRunFailedError
+      expect(returnValue).toHaveProperty('name');
+      expect(returnValue.name).toBe('WorkflowRunFailedError');
+
+      // Get the workflow run data using CLI
       const { json: runData } = await cliInspectJson(`runs ${run.runId}`);
 
       // Verify the workflow is marked as failed
