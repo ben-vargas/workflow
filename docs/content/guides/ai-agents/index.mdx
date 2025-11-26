@@ -32,6 +32,7 @@ export async function POST(req: Request) {
     model: modelId,
     system: 'You are a helpful assistant.',
     tools: tools(),
+    stopWhen: stepCountIs(20),
   });
 
   const stream = agent.stream({ messages });
@@ -61,7 +62,7 @@ import { stepCountIs } from 'ai';
 import { tools } from '@/ai/tools';
 import type { ModelMessage, UIMessageChunk } from 'ai';
 
-export async function chatWorkflow({ // [!code highlight]
+export async function chatWorkflow({
   messages,
   modelId,
 }: {
@@ -78,9 +79,10 @@ export async function chatWorkflow({ // [!code highlight]
     tools: tools(),
   });
 
-  await agent.stream({
+  await agent.stream({ // [!code highlight]
     messages,
     writable,
+    stopWhen: stepCountIs(20),
   });
 }
 ```
@@ -105,7 +107,6 @@ export async function POST(req: Request) {
   const { messages, modelId } = await req.json();
   const modelMessages = convertToModelMessages(messages);
 
-  // This will start the workflow in the background
   const run = await start(chatWorkflow, [{ messages: modelMessages, modelId }]); // [!code highlight]
 
   return createUIMessageStreamResponse({
@@ -143,11 +144,9 @@ With `"use step"`:
 - Each tool execution appears as a discrete step in observability tools
 - Results are persisted, so replays skip already-completed tools
 
-Note that any side-effects or network operations need to be run inside step functions, not in your workflow code.
-
 ### Step 5: Stream Progress Updates from Tools
 
-Tools can emit progress updates to the same stream the agent uses. This allows the UI to display tool status and live updates from steps, without having to manually wire up streams:
+Tools can emit progress updates to the same stream the agent uses. This allows the UI to display tool status:
 
 ```typescript title="ai/tools/run-command.ts" lineNumbers
 import { tool } from 'ai';
@@ -195,29 +194,32 @@ The UI can handle these data chunks to display real-time progress.
 
 ## Running the Workflow
 
-Run your development server, kick off a chat session, and then open the observability dashboard to see your workflow running live:
+Run your development server, then open the observability dashboard to see your workflow in action:
 
 ```bash
 npx workflow web
 ```
 
-This opens a local dashboard showing all your workflow runs, with trace-viewers showing detailed views of each run, errors, retries, timing, and more.
-The UI also allows you to cancel, re-run, and start new runs.
+This opens a local dashboard showing:
+
+- All workflow runs and their status
+- Individual step executions with timing
+- Errors and retry attempts
+- Stream data flowing through the workflow
 
 ## Next Steps
 
-Now that you have a basic durable agent, it's a short step to adding additional capabilities like resumable streams, sleep and delays, and human-in-the-loop.
+Now that you have a basic durable agent, explore these additional capabilities:
 
 <Cards>
-  <Card title="Resumable Streams" href="/docs/ai-agents/resumable-streams">
+  <Card title="Resumable Streams" href="/guides/ai-agents/resumable-streams">
     Enable clients to reconnect to interrupted streams without losing data.
   </Card>
-  <Card title="Sleep and Delays" href="/docs/ai-agents/sleep-and-delays">
-    Add native sleep functionality to allow your workflows to pause and resume, enable work on schedules, and more.
+  <Card title="Sleep and Delays" href="/guides/ai-agents/sleep-and-delays">
+    Add native sleep functionality for time-based workflows.
   </Card>
-  <Card title="Human-in-the-Loop" href="/docs/ai-agents/human-in-the-loop">
-    Implement approval workflows that wait for human input or other external events,
-    like PR updates, webhooks, and more.
+  <Card title="Human-in-the-Loop" href="/guides/ai-agents/human-in-the-loop">
+    Implement approval workflows that wait for human input.
   </Card>
 </Cards>
 
