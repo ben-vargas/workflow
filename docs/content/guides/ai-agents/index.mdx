@@ -37,7 +37,6 @@ export async function POST(req: Request) {
     model: modelId,
     system: 'You are a helpful assistant.',
     tools,
-    stopWhen: stepCountIs(20),
   });
 
   const stream = agent.stream({ messages });
@@ -123,6 +122,19 @@ Add the Workflow DevKit packages to your project:
 
 ```bash
 npm install workflow @workflow/ai
+```
+
+and extend the NextJS compiler to transform the code:
+
+```typescript title="next.config.ts" lineNumbers
+import { withWorkflow } from 'workflow/next';
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  // ... rest of your Next.js config
+};
+
+export default withWorkflow(nextConfig);
 ```
 
 </Step>
