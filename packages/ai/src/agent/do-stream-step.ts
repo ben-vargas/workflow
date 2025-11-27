@@ -39,7 +39,6 @@ export async function doStreamStep(
       'Invalid "model initialization" argument. Must be a string or a function that returns a LanguageModelV2 instance.'
     );
   }
-  console.log('doStreamStep tools', tools);
 
   const result = await model.doStream({
     prompt: conversationPrompt,
@@ -55,7 +54,6 @@ export async function doStreamStep(
     .pipeThrough(
       new TransformStream({
         transform(chunk, controller) {
-          console.log('doStreamStep chunk', chunk);
           if (chunk.type === 'tool-call') {
             toolCalls.push({
               ...chunk,
