@@ -1,0 +1,294 @@
+---
+title: Chat Session Modeling
+---
+
+Chat sessions in AI agents can be modeled at different layers of your architecture. The choice affects state ownership, latency characteristics, and how you handle interruptions and reconnections. Workflow DevKit supports two primary patterns.
+
+## Single-Turn Workflows
+
+Each user message triggers a new workflow run. The client owns the conversation history and sends the full message array with each request.
+
+<Tabs items={['Workflow', 'API Route', 'Client']}>
+
+<Tab value="Workflow">
+
+```typescript title="app/api/chat/workflow.ts" lineNumbers
+import { DurableAgent } from '@workflow/ai/agent';
+import { getWritable } from 'workflow';
+import type { ModelMessage, UIMessageChunk } from 'ai';
+
+export async function chatWorkflow(messages: ModelMessage[]) {
+  'use workflow';
+
+  const writable = getWritable<UIMessageChunk>();
+
+  const agent = new DurableAgent({
+    model: 'anthropic/claude-sonnet-4',
+    system: 'You are a helpful assistant.',
+    tools: { /* ... */ },
+  });
+
+  const { messages: result } = await agent.stream({
+    messages, // [!code highlight] Full history from client
+    writable,
+  });
+
+  return { messages: result };
+}
+```
+
+</Tab>
+
+<Tab value="API Route">
+
+```typescript title="app/api/chat/route.ts" lineNumbers
+import { createUIMessageStreamResponse, convertToModelMessages } from 'ai';
+import { start } from 'workflow/api';
+import { chatWorkflow } from './workflow';
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+  const modelMessages = convertToModelMessages(messages);
+
+  const run = await start(chatWorkflow, [modelMessages]); // [!code highlight]
+
+  return createUIMessageStreamResponse({
+    stream: run.readable,
+  });
+}
+```
+
+</Tab>
+
+<Tab value="Client">
+
+```typescript title="app/chat.tsx" lineNumbers
+'use client';
+
+import { useChat } from '@ai-sdk/react';
+
+export function Chat() {
+  const { messages, input, handleInputChange, handleSubmit } = useChat({
+    api: '/api/chat', // [!code highlight] AI SDK manages message history
+  });
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* ... render messages ... */}
+      <input value={input} onChange={handleInputChange} />
+    </form>
+  );
+}
+```
+
+</Tab>
+
+</Tabs>
+
+**Characteristics:**
+
+- Client owns conversation state (via AI SDK's `useChat`)
+- Each turn is independently retryable
+- Simpler server-side logic; no cross-turn state management
+- Workflow results are self-contained
+
+This is the pattern shown at the start of [Building Durable AI Agents](/guides/ai-agents).
+
+## Multi-Turn Workflows
+
+A single workflow handles the entire conversation session. The server owns conversation state, and clients inject new messages via hooks.
+
+<Tabs items={['Workflow', 'API Routes', 'Hook Definition', 'Client']}>
+
+<Tab value="Workflow">
+
+```typescript title="app/api/chat/workflow.ts" lineNumbers
+import { DurableAgent } from '@workflow/ai/agent';
+import { getWritable } from 'workflow';
+import { chatMessageHook } from '@/ai/hooks/chat-message';
+import type { ModelMessage, UIMessageChunk } from 'ai';
+
+export async function chatWorkflow(threadId: string, initialMessage: string) {
+  'use workflow';
+
+  const writable = getWritable<UIMessageChunk>();
+  const messages: ModelMessage[] = [{ role: 'user', content: initialMessage }];
+
+  const agent = new DurableAgent({
+    model: 'anthropic/claude-sonnet-4',
+    system: 'You are a helpful assistant.',
+    tools: { /* ... */ },
+  });
+
+  // Create hook with thread-specific token for resumption // [!code highlight]
+  const hook = chatMessageHook.create({ token: `thread:${threadId}` }); // [!code highlight]
+
+  while (true) {
+    // Process current messages
+    const { messages: result } = await agent.stream({
+      messages,
+      writable,
+      preventClose: true, // [!code highlight] Keep stream open for follow-ups
+    });
+    messages.push(...result.slice(messages.length));
+
+    // Wait for next user message // [!code highlight]
+    const { message } = await hook; // [!code highlight]
+    if (message === '/done') break;
+
+    messages.push({ role: 'user', content: message });
+  }
+
+  return { messages };
+}
+```
+
+</Tab>
+
+<Tab value="API Routes">
+
+Two endpoints: one to start the session, one to send follow-up messages.
+
+```typescript title="app/api/chat/route.ts" lineNumbers
+import { createUIMessageStreamResponse } from 'ai';
+import { start } from 'workflow/api';
+import { chatWorkflow } from './workflow';
+
+export async function POST(req: Request) {
+  const { threadId, message } = await req.json();
+
+  const run = await start(chatWorkflow, [threadId, message]); // [!code highlight]
+
+  return createUIMessageStreamResponse({
+    stream: run.readable,
+    headers: { 'X-Thread-Id': threadId },
+  });
+}
+```
+
+```typescript title="app/api/chat/message/route.ts" lineNumbers
+import { chatMessageHook } from '@/ai/hooks/chat-message';
+
+export async function POST(req: Request) {
+  const { threadId, message } = await req.json();
+
+  await chatMessageHook.resume(`thread:${threadId}`, { message }); // [!code highlight]
+
+  return Response.json({ success: true });
+}
+```
+
+</Tab>
+
+<Tab value="Hook Definition">
+
+```typescript title="ai/hooks/chat-message.ts" lineNumbers
+import { defineHook } from 'workflow';
+import { z } from 'zod';
+
+export const chatMessageHook = defineHook({
+  schema: z.object({
+    message: z.string(),
+  }),
+});
+```
+
+</Tab>
+
+<Tab value="Client">
+
+```typescript title="hooks/use-multi-turn-chat.ts" lineNumbers
+'use client';
+
+import { useState, useCallback } from 'react';
+
+export function useMultiTurnChat() {
+  const [threadId, setThreadId] = useState<string | null>(null);
+
+  const startSession = useCallback(async (message: string) => {
+    const newThreadId = crypto.randomUUID();
+    setThreadId(newThreadId);
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: newThreadId, message }),
+    });
+
+    return response.body; // Stream for UI rendering
+  }, []);
+
+  const sendMessage = useCallback(async (message: string) => {
+    if (!threadId) return;
+
+    await fetch('/api/chat/message', { // [!code highlight]
+      method: 'POST', // [!code highlight]
+      headers: { 'Content-Type': 'application/json' }, // [!code highlight]
+      body: JSON.stringify({ threadId, message }), // [!code highlight]
+    }); // [!code highlight]
+  }, [threadId]);
+
+  const endSession = useCallback(async () => {
+    if (!threadId) return;
+    await fetch('/api/chat/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId, message: '/done' }),
+    });
+    setThreadId(null);
+  }, [threadId]);
+
+  return { threadId, startSession, sendMessage, endSession };
+}
+```
+
+</Tab>
+
+</Tabs>
+
+**Characteristics:**
+
+- Server owns conversation state
+- Single workflow spans the entire session
+- Enables multi-party injection (webhooks, system events, other users)
+- Workflow can coordinate cross-turn behavior (reminders, timeouts)
+
+## Choosing a Pattern
+
+| Consideration | Single-Turn | Multi-Turn |
+|--------------|-------------|------------|
+| State ownership | Client | Server |
+| Message injection from backend | Requires external coordination | Native via hooks |
+| Session continuity after client disconnect | Lost (new run per turn) | Preserved |
+| Workflow complexity | Lower | Higher |
+| Observability scope | Per-turn traces | Full session traces |
+
+**Multi-turn is recommended for most production use-cases.** If you're starting fresh, go with multi-turn—it's more flexible and grows with your requirements. Server-owned state, native message injection, and full session observability become increasingly valuable as your agent matures.
+
+**Single-turn works well when adapting existing architectures.** If you already have client-side message state management (e.g., via AI SDK's `useChat`), single-turn workflows slot in with minimal changes. Each turn maps cleanly to an independent workflow run.
+
+## Multi-Party Injection
+
+The multi-turn pattern enables backend systems to inject messages into active conversations:
+
+```typescript title="app/api/webhooks/order-update/route.ts" lineNumbers
+import { chatMessageHook } from '@/ai/hooks/chat-message';
+
+export async function POST(req: Request) {
+  const { threadId, orderStatus } = await req.json();
+
+  // Inject order update into the conversation // [!code highlight]
+  await chatMessageHook.resume(`thread:${threadId}`, { // [!code highlight]
+    message: `[System] Order status updated: ${orderStatus}`, // [!code highlight]
+  }); // [!code highlight]
+
+  return Response.json({ success: true });
+}
+```
+
+## Related Documentation
+
+- [Building Durable AI Agents](/guides/ai-agents) - Foundation guide for durable agents
+- [Message Queueing](/guides/ai-agents/message-queueing) - Queueing messages during tool execution
+- [`defineHook()` API Reference](/docs/api-reference/workflow/define-hook) - Hook configuration options
+- [`DurableAgent` API Reference](/docs/api-reference/workflow-ai/durable-agent) - Full API documentation

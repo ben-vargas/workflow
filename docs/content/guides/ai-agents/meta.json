@@ -5,6 +5,7 @@
     "resumable-streams",
     "sleep-and-delays",
     "human-in-the-loop",
+    "chat-session-modeling",
     "message-queueing"
   ],
   "defaultOpen": true

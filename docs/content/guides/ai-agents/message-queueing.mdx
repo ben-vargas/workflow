@@ -2,293 +2,132 @@
 title: Queueing User Messages
 ---
 
-import { AgentTraces } from '@/components/guides/agent-traces';
+When using [multi-turn workflows](/guides/ai-agents/chat-session-modeling#multi-turn-workflows), messages typically arrive between agent turns—the workflow waits at a hook, receives a message, then starts a new turn. But sometimes you need to inject messages *during* an agent's turn, before tool calls complete or while the model is reasoning.
 
-In some scenarios, you want to queue new messages into an ongoing AI agent conversation. For example, when a user sends follow-up messages while the agent is still processing, or when external events need to influence the conversation mid-stream.
+`DurableAgent`'s `prepareStep` callback enables this by running before each step in the agent loop, giving you a chance to inject queued messages into the conversation.
 
-Workflow DevKit's [`defineHook()`](/docs/api-reference/workflow/define-hook) enables this pattern: defining a typed hook that can be resumed programmatically via an API endpoint, allowing both users and backend systems to enqueue messages for an existing workflow run.
+## When to Use This
 
-Messages get queued until the next tool call gets executed, and then get flushed to the AI call with the tool call results.
+Message queueing is useful when:
 
-<AgentTraces variant="message-queue" />
+- Users send follow-up messages while the agent is still processing tool calls
+- External systems need to inject context mid-turn (e.g., a webhook fires during processing)
+- You want messages to influence the agent's next step rather than waiting for the current turn to complete
 
-## How It Works
+<Callout type="info">
+If you just need basic multi-turn conversations where messages arrive between turns, see [Chat Session Modeling](/guides/ai-agents/chat-session-modeling). This guide covers the more advanced case of injecting messages *during* turns.
+</Callout>
 
-<Steps>
+## The `prepareStep` Callback
 
-<Step>
-A hook is defined with a schema for incoming messages, and the workflow creates instances of this hook in a loop.
-</Step>
+The `prepareStep` callback runs before each step in the agent loop. It receives the current state and can modify the messages sent to the model:
 
-<Step>
-The agent processes messages and returns the updated conversation history.
-</Step>
+```typescript lineNumbers
+interface PrepareStepInfo {
+  model: string | (() => Promise<LanguageModelV2>);  // Current model
+  stepNumber: number;                                 // 0-indexed step count
+  steps: StepResult[];                               // Previous step results
+  messages: LanguageModelV2Prompt;                   // Messages to be sent
+}
 
-<Step>
-The workflow waits for the hook to be resumed, then processes the new message.
-</Step>
-
-<Step>
-An API endpoint accepts a `runId` and `message`, resuming the hook programmatically.
-</Step>
-
-<Step>
-A special command (like `/done`) signals the end of the conversation.
-</Step>
-
-</Steps>
-
-## Implementation
-
-<Tabs items={['Workflow', 'API Routes', 'Hook Definition']}>
-
-<Tab value="Workflow">
-
-The workflow creates hook instances in a loop, waiting for each message:
-
-```typescript title="app/api/chat/workflow.ts" lineNumbers
-import { DurableAgent } from '@workflow/ai/agent';
-import type { ModelMessage, UIMessageChunk } from 'ai';
-import { getWritable } from 'workflow';
-import { chatMessageHook } from '@/ai/hooks/chat-message';
-
-export async function chatWorkflow(initialMessage: string) {
-  'use workflow';
-
-  const writable = getWritable<UIMessageChunk>();
-
-  const agent = new DurableAgent({ /* ... agent setup */ })
-
-  const hook = chatMessageHook.create(); // [!code highlight]
-
-  while (true) { // [!code highlight]
-
-    // Do a stream step
-    const { messages: latest } = await agent.stream({
-      writable,
-      messages,
-      preventClose: true, // [!code highlight] keep agent open for follow-ups
-    });
-
-    // Then check if any messages have been queued, or wait for a new one to arrive
-    const { message, username } = await hook; // [!code highlight]
-    if (message === '/done') {
-      break;
-    }
-    const content = username ? `[${username}]: ${message}` : message;
-    messages.push({ role: 'user', content }); // [!code highlight] add to conversation
-  }
-
-  // [... close stream]
-
-  return { messages };
+interface PrepareStepResult {
+  model?: string | (() => Promise<LanguageModelV2>); // Override model
+  messages?: LanguageModelV2Prompt;                  // Override messages
 }
 ```
 
-<Callout type="info">
-Each `chatMessageHook.create()` generates a new hook instance. The workflow suspends at `await hook` until the hook is resumed via the API.
-</Callout>
+## Injecting Queued Messages
 
-</Tab>
+Combine a message queue with `prepareStep` to inject messages that arrive during processing:
 
-<Tab value="API Routes">
+```typescript title="app/api/chat/workflow.ts" lineNumbers
+import { DurableAgent } from '@workflow/ai/agent';
+import type { UIMessageChunk } from 'ai';
+import { getWritable } from 'workflow';
+import { chatMessageHook } from '@/ai/hooks/chat-message';
 
-Two endpoints: one to start the workflow, one to enqueue messages:
+export async function chatWorkflow(threadId: string, initialMessage: string) {
+  'use workflow';
 
-```typescript title="app/api/chat/route.ts" lineNumbers
-import { createUIMessageStreamResponse, convertToModelMessages } from 'ai';
-import { start } from 'workflow/api';
-import { chatWorkflow } from './workflow';
+  const writable = getWritable<UIMessageChunk>();
+  const messageQueue: Array<{ role: 'user'; content: string }> = []; // [!code highlight]
 
-export async function POST(req: Request) {
-  const { message } = await req.json();
+  const agent = new DurableAgent({
+    model: 'anthropic/claude-haiku-4.5',
+    system: 'You are a helpful assistant.',
+    tools: { /* long-running tools */ },
+  });
 
-  const run = await start(chatWorkflow, [message]); // [!code highlight]
+  // Listen for messages in background (non-blocking) // [!code highlight]
+  const hook = chatMessageHook.create({ token: `thread:${threadId}` }); // [!code highlight]
+  hook.then(({ message }) => { // [!code highlight]
+    messageQueue.push({ role: 'user', content: message }); // [!code highlight]
+  }); // [!code highlight]
 
-  return createUIMessageStreamResponse({
-    stream: run.readable,
-    headers: {
-      'X-Run-Id': run.id, // Return runId to client // [!code highlight]
-    },
+  await agent.stream({
+    messages: [{ role: 'user', content: initialMessage }],
+    writable,
+    prepareStep: ({ messages: currentMessages }) => { // [!code highlight]
+      // Inject any queued messages before the next LLM call // [!code highlight]
+      if (messageQueue.length > 0) { // [!code highlight]
+        const newMessages = messageQueue.splice(0); // Drain queue // [!code highlight]
+        return { // [!code highlight]
+          messages: [ // [!code highlight]
+            ...currentMessages, // [!code highlight]
+            ...newMessages.map(m => ({ // [!code highlight]
+              role: m.role, // [!code highlight]
+              content: [{ type: 'text' as const, text: m.content }], // [!code highlight]
+            })), // [!code highlight]
+          ], // [!code highlight]
+        }; // [!code highlight]
+      } // [!code highlight]
+      return {}; // [!code highlight]
+    }, // [!code highlight]
   });
 }
 ```
 
-```typescript title="app/api/chat/message/route.ts" lineNumbers
-import { chatMessageHook } from '@/ai/hooks/chat-message';
+Messages sent via `chatMessageHook.resume()` accumulate in the queue and get injected before the next step—whether that's a tool call or another LLM request.
 
-export async function POST(req: Request) {
-  const { runId, message, username } = await req.json();
+<Callout type="info">
+The `prepareStep` callback receives messages in `LanguageModelV2Prompt` format (with content arrays), which is the internal format used by the AI SDK.
+</Callout>
 
-  try {
-    await chatMessageHook.resume(runId, { message, username }); // [!code highlight]
-    return Response.json({ success: true });
-  } catch (error) {
-    return Response.json(
-      { error: 'Failed to enqueue message' },
-      { status: 400 }
-    );
-  }
-}
-```
+## Other `prepareStep` Patterns
 
-This API can be called by:
+Beyond message injection, `prepareStep` supports other per-step modifications:
 
-- **UI clients** sending follow-up messages
-- **Backend services** injecting system events
-- **External systems** via API integration
-
-</Tab>
-
-<Tab value="Hook Definition">
-
-Define a typed hook for incoming messages:
-
-```typescript title="ai/hooks/chat-message.ts" lineNumbers
-import { defineHook } from 'workflow';
-import { z } from 'zod';
-
-export const chatMessageHook = defineHook({
-  schema: z.object({
-    message: z.string(),
-    username: z.string().optional(),
-  }),
-});
-```
-
-</Tab>
-
-</Tabs>
-
-## Client Integration
-
-The client stores the `runId` from the initial response and uses it for follow-ups:
-
-```typescript title="hooks/use-chat-with-queue.ts" lineNumbers
-'use client';
-
-import { useState, useCallback } from 'react';
-
-export function useChatWithQueue() {
-  const [runId, setRunId] = useState<string | null>(null);
-
-  const startChat = useCallback(async (message: string) => {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    });
-
-    // Store runId for follow-up messages // [!code highlight]
-    const id = response.headers.get('X-Run-Id'); // [!code highlight]
-    setRunId(id); // [!code highlight]
-
-    return response.body; // Stream for UI rendering
-  }, []);
-
-  const sendMessage = useCallback(async (message: string) => {
-    if (!runId) return;
-
-    await fetch('/api/chat/message', { // [!code highlight]
-      method: 'POST', // [!code highlight]
-      headers: { 'Content-Type': 'application/json' }, // [!code highlight]
-      body: JSON.stringify({ runId, message }), // [!code highlight]
-    }); // [!code highlight]
-  }, [runId]);
-
-  const endChat = useCallback(async () => {
-    if (!runId) return;
-    await fetch('/api/chat/message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ runId, message: '/done' }),
-    });
-    setRunId(null);
-  }, [runId]);
-
-  return { runId, startChat, sendMessage, endChat };
-}
-```
-
-## Use Cases
-
-### System Event Injection
-
-Backend services can inject messages based on external events:
-
-```typescript title="app/api/webhooks/payment/route.ts" lineNumbers
-import { chatMessageHook } from '@/ai/hooks/chat-message';
-
-export async function POST(req: Request) {
-  const { runId, paymentStatus, amount } = await req.json();
-
-  // Inject payment notification into the conversation // [!code highlight]
-  await chatMessageHook.resume(runId, { // [!code highlight]
-    message: `Payment ${paymentStatus}: $${amount}`, // [!code highlight]
-    username: 'system', // [!code highlight]
-  }); // [!code highlight]
-
-  return Response.json({ success: true });
-}
-```
-
-### Collaborative Sessions
-
-Multiple users can send messages to the same conversation by sharing the `runId`:
+**Context Management** — Trim old messages to stay within context limits:
 
 ```typescript lineNumbers
-// Any participant can enqueue messages using the shared runId
-await fetch('/api/chat/message', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    runId: sharedRunId,
-    message: 'I have a question about that',
-    username: 'Alice',
-  }),
-});
+prepareStep: ({ messages }) => {
+  if (messages.length > 20) {
+    return {
+      messages: [
+        messages[0],            // Keep system message
+        ...messages.slice(-10), // Keep last 10 messages
+      ],
+    };
+  }
+  return {};
+}
 ```
 
-### Scheduled Follow-ups
-
-Use `sleep()` in combination with hooks for time-delayed messages:
+**Dynamic Model Selection** — Switch models based on conversation complexity:
 
 ```typescript lineNumbers
-import { sleep } from 'workflow';
-
-export async function chatWithRemindersWorkflow(initialMessage: string) {
-  'use workflow';
-
-  // ... agent setup (see "Building Durable AI Agents" guide)
-
-  while (true) {
-    const hook = chatMessageHook.create();
-
-    // Race between user message and reminder timeout // [!code highlight]
-    const result = await Promise.race([ // [!code highlight]
-      hook.then((data) => ({ type: 'message' as const, data })), // [!code highlight]
-      sleep('5m').then(() => ({ type: 'timeout' as const })), // [!code highlight]
-    ]); // [!code highlight]
-
-    if (result.type === 'timeout') {
-      messages.push({
-        role: 'user',
-        content: '[System: User has been idle for 5 minutes]',
-      });
-    } else if (result.data.message === '/done') {
-      break;
-    } else {
-      messages.push({ role: 'user', content: result.data.message });
-    }
-
-    // Continue conversation...
+prepareStep: ({ stepNumber, messages }) => {
+  // Use a stronger model for later steps
+  if (stepNumber > 2 && messages.length > 10) {
+    return { model: 'anthropic/claude-sonnet-4.5' };
   }
+  return {};
 }
 ```
 
 ## Related Documentation
 
+- [Chat Session Modeling](/guides/ai-agents/chat-session-modeling) - Single-turn vs multi-turn patterns
 - [Building Durable AI Agents](/guides/ai-agents) - Complete guide to creating durable agents
-- [Human-in-the-Loop](/guides/ai-agents/human-in-the-loop) - Using hooks for approval workflows
-- [Sleep and Delays](/guides/ai-agents/sleep-and-delays) - Time-based workflow patterns
+- [`DurableAgent` API Reference](/docs/api-reference/workflow-ai/durable-agent) - Full API documentation
 - [`defineHook()` API Reference](/docs/api-reference/workflow/define-hook) - Hook configuration options
