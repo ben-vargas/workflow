@@ -8,9 +8,9 @@ import type {
   LanguageModelV2,
   LanguageModelV2ToolCall,
 } from '@ai-sdk/provider';
-import { FatalError } from 'workflow';
-import { describe, expect, it, vi } from 'vitest';
 import type { ToolSet } from 'ai';
+import { describe, expect, it, vi } from 'vitest';
+import { FatalError } from 'workflow';
 import { z } from 'zod';
 
 // Mock the streamTextIterator
