@@ -53,8 +53,8 @@ const messageQueueRows: TraceRow[] = [
   {
     label: 'hook.enqueue()',
     className: colors.webhook,
-    start: 18,
-    duration: 18,
+    start: 12,
+    duration: 24,
   },
   {
     label: 'tool.checkDB()',
@@ -66,8 +66,8 @@ const messageQueueRows: TraceRow[] = [
   {
     label: 'hook.enqueue()',
     className: colors.webhook,
-    start: 52,
-    duration: 18,
+    start: 46,
+    duration: 24,
   },
   {
     label: 'tool.search()',
