@@ -521,13 +521,13 @@ export async function stepFunctionWithClosureWorkflow() {
   const prefix = 'Result: ';
 
   // Create a step function that captures closure variables
-  const calculate = async (x: number) => {
+  const computeValue = async (x: number) => {
     'use step';
     return `${prefix}${x * multiplier}`;
   };
 
   // Pass the step function (with closure vars) to another step
-  const result = await stepThatCallsStepFn(calculate, 7);
+  const result = await stepThatCallsStepFn(computeValue, 7);
   return result;
 }
 
