@@ -106,9 +106,9 @@ export interface ManifestWorkflowEntry {
 }
 
 /**
- * Unified manifest structure - single source of truth for all workflow metadata
+ * Manifest structure - single source of truth for all workflow metadata
  */
-export interface UnifiedManifest {
+export interface Manifest {
   version: string;
   steps: {
     [filePath: string]: {
@@ -128,7 +128,7 @@ export interface UnifiedManifest {
 
 /**
  * Extracts workflow graphs from a bundled workflow file.
- * Returns workflow entries organized by file path, ready for merging into UnifiedManifest.
+ * Returns workflow entries organized by file path, ready for merging into Manifest.
  */
 export async function extractWorkflowGraphs(bundlePath: string): Promise<{
   [filePath: string]: {
