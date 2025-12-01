@@ -1,5 +1,66 @@
 # @workflow/world-local
 
+## 4.0.1-beta.13
+
+### Patch Changes
+
+- 40057db: Use a semaphore to enforce a concurrency limit on the local world queue
+- Updated dependencies [fb9fd0f]
+  - @workflow/world@4.0.1-beta.7
+
+## 4.0.1-beta.12
+
+### Patch Changes
+
+- edb69c3: Fix port detection and base URL resolution for dev servers
+- Updated dependencies [edb69c3]
+  - @workflow/utils@4.0.1-beta.4
+
+## 4.0.1-beta.11
+
+### Patch Changes
+
+- 3436629: Fix bugs in streamer (empty chunk handling and cloning chunks)
+
+## 5.0.0-beta.10
+
+### Patch Changes
+
+- 3d99d6d: Update `@vercel/oidc` and `@vercel/queue` to fix expired OIDC token edge case
+
+## 5.0.0-beta.9
+
+### Patch Changes
+
+- 4b70739: Require specifying runId when writing to stream
+- Updated dependencies [4b70739]
+  - @workflow/world@4.0.1-beta.6
+
+## 5.0.0-beta.8
+
+### Major Changes
+
+- aa015af: BREAKING: Change `createEmbeddedWorld` API signature from positional parameters to config object. Add baseUrl configuration support.
+
+  **Breaking change:**
+
+  - `createEmbeddedWorld(dataDir?, port?)` → `createEmbeddedWorld(args?: Partial<Config>)`
+
+  **New features:**
+
+  - Add `baseUrl` config option for HTTPS and custom hostnames (via config or `WORKFLOW_EMBEDDED_BASE_URL` env var)
+  - Support for port 0 (OS-assigned port)
+
+### Patch Changes
+
+- 00b0bb9: Support for structured errors
+- b97b6bf: Lock all dependencies in our packages
+- 79480f2: Clean up Hook entities after a workflow run has completed
+- Updated dependencies [b97b6bf]
+- Updated dependencies [00b0bb9]
+  - @workflow/utils@4.0.1-beta.3
+  - @workflow/world@4.0.1-beta.5
+
 ## 4.0.1-beta.7
 
 ### Patch Changes

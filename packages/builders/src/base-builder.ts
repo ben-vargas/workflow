@@ -107,6 +107,7 @@ export abstract class BaseBuilder {
         '**/.vercel/**',
         '**/.workflow-data/**',
         '**/.well-known/workflow/**',
+        '**/.svelte-kit/**',
       ],
       absolute: true,
     });
@@ -367,7 +368,7 @@ export abstract class BaseBuilder {
       ],
       // Plugin should catch most things, but this lets users hard override
       // if the plugin misses anything that should be externalized
-      external: this.config.externalPackages || [],
+      external: ['bun', 'bun:*', ...(this.config.externalPackages || [])],
     });
 
     const stepsResult = await esbuildCtx.rebuild();
@@ -724,7 +725,7 @@ export const OPTIONS = handler;`;
     const webhookBundleStart = Date.now();
     const result = await esbuild.build({
       banner: {
-        js: '// biome-ignore-all lint: generated file\n/* eslint-disable */\n',
+        js: `// biome-ignore-all lint: generated file\n/* eslint-disable */`,
       },
       stdin: {
         contents: routeContent,

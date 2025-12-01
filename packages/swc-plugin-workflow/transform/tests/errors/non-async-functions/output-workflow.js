@@ -9,17 +9,8 @@ export const syncWorkflow = ()=>{
     'use workflow';
     return 'test';
 };
-// Error: sync method with use step
-const obj = {
-    syncMethod () {
-        'use step';
-        return true;
-    }
-};
 // These are ok
-export async function validStep() {
-    return globalThis[Symbol.for("WORKFLOW_USE_STEP")]("step//input.js//validStep")();
-}
+export var validStep = globalThis[Symbol.for("WORKFLOW_USE_STEP")]("step//input.js//validStep");
 export const validWorkflow = async ()=>{
     return 'test';
 };

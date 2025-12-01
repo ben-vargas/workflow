@@ -1,16 +1,22 @@
 import { runInContext } from 'node:vm';
 import type { WorkflowRuntimeError } from '@workflow/errors';
 import { describe, expect, it } from 'vitest';
+import { getStepFunction, registerStepFunction } from './private.js';
 import {
   dehydrateStepArguments,
   dehydrateStepReturnValue,
   dehydrateWorkflowArguments,
   dehydrateWorkflowReturnValue,
+  getCommonRevivers,
   getStreamType,
+  getWorkflowReducers,
+  hydrateStepArguments,
   hydrateWorkflowArguments,
 } from './serialization.js';
 import { STREAM_NAME_SYMBOL } from './symbols.js';
 import { createContext } from './vm/index.js';
+
+const mockRunId = 'wrun_mockidnumber0001';
 
 describe('getStreamType', () => {
   it('should return `undefined` for a regular stream', () => {
@@ -38,7 +44,7 @@ describe('workflow arguments', () => {
 
   it('should work with Date', () => {
     const date = new Date('2025-07-17T04:30:34.824Z');
-    const serialized = dehydrateWorkflowArguments(date, []);
+    const serialized = dehydrateWorkflowArguments(date, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -58,7 +64,7 @@ describe('workflow arguments', () => {
 
   it('should work with invalid Date', () => {
     const date = new Date('asdf');
-    const serialized = dehydrateWorkflowArguments(date, []);
+    const serialized = dehydrateWorkflowArguments(date, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -78,7 +84,7 @@ describe('workflow arguments', () => {
 
   it('should work with BigInt', () => {
     const bigInt = BigInt('9007199254740992');
-    const serialized = dehydrateWorkflowArguments(bigInt, []);
+    const serialized = dehydrateWorkflowArguments(bigInt, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -96,7 +102,7 @@ describe('workflow arguments', () => {
 
   it('should work with BigInt negative', () => {
     const bigInt = BigInt('-12345678901234567890');
-    const serialized = dehydrateWorkflowArguments(bigInt, []);
+    const serialized = dehydrateWorkflowArguments(bigInt, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -117,7 +123,7 @@ describe('workflow arguments', () => {
       [2, 'foo'],
       [6, 'bar'],
     ]);
-    const serialized = dehydrateWorkflowArguments(map, []);
+    const serialized = dehydrateWorkflowArguments(map, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -151,7 +157,7 @@ describe('workflow arguments', () => {
 
   it('should work with Set', () => {
     const set = new Set([1, '2', true]);
-    const serialized = dehydrateWorkflowArguments(set, []);
+    const serialized = dehydrateWorkflowArguments(set, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -177,7 +183,7 @@ describe('workflow arguments', () => {
 
   it('should work with WritableStream', () => {
     const stream = new WritableStream();
-    const serialized = dehydrateWorkflowArguments(stream, []);
+    const serialized = dehydrateWorkflowArguments(stream, [], mockRunId);
     const uuid = serialized[2];
     expect(serialized).toMatchInlineSnapshot(`
       [
@@ -202,7 +208,7 @@ describe('workflow arguments', () => {
 
   it('should work with ReadableStream', () => {
     const stream = new ReadableStream();
-    const serialized = dehydrateWorkflowArguments(stream, []);
+    const serialized = dehydrateWorkflowArguments(stream, [], mockRunId);
     const uuid = serialized[2];
     expect(serialized).toMatchInlineSnapshot(`
       [
@@ -230,7 +236,7 @@ describe('workflow arguments', () => {
     headers.set('foo', 'bar');
     headers.append('set-cookie', 'a');
     headers.append('set-cookie', 'b');
-    const serialized = dehydrateWorkflowArguments(headers, []);
+    const serialized = dehydrateWorkflowArguments(headers, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -278,7 +284,7 @@ describe('workflow arguments', () => {
         ['set-cookie', 'b'],
       ]),
     });
-    const serialized = dehydrateWorkflowArguments(response, []);
+    const serialized = dehydrateWorkflowArguments(response, [], mockRunId);
     const bodyUuid = serialized[serialized.length - 3];
     expect(serialized).toMatchInlineSnapshot(`
       [
@@ -369,7 +375,7 @@ describe('workflow arguments', () => {
   it('should work with URLSearchParams', () => {
     const params = new URLSearchParams('a=1&b=2&a=3');
 
-    const serialized = dehydrateWorkflowArguments(params, []);
+    const serialized = dehydrateWorkflowArguments(params, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -396,7 +402,7 @@ describe('workflow arguments', () => {
   it('should work with empty URLSearchParams', () => {
     const params = new URLSearchParams();
 
-    const serialized = dehydrateWorkflowArguments(params, []);
+    const serialized = dehydrateWorkflowArguments(params, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -417,7 +423,7 @@ describe('workflow arguments', () => {
   it('should work with empty ArrayBuffer', () => {
     const buffer = new ArrayBuffer(0);
 
-    const serialized = dehydrateWorkflowArguments(buffer, []);
+    const serialized = dehydrateWorkflowArguments(buffer, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -437,7 +443,7 @@ describe('workflow arguments', () => {
   it('should work with empty Uint8Array', () => {
     const array = new Uint8Array(0);
 
-    const serialized = dehydrateWorkflowArguments(array, []);
+    const serialized = dehydrateWorkflowArguments(array, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -458,7 +464,7 @@ describe('workflow arguments', () => {
   it('should work with empty Int32Array', () => {
     const array = new Int32Array(0);
 
-    const serialized = dehydrateWorkflowArguments(array, []);
+    const serialized = dehydrateWorkflowArguments(array, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -479,7 +485,7 @@ describe('workflow arguments', () => {
   it('should work with empty Float64Array', () => {
     const array = new Float64Array(0);
 
-    const serialized = dehydrateWorkflowArguments(array, []);
+    const serialized = dehydrateWorkflowArguments(array, [], mockRunId);
     expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -514,7 +520,7 @@ describe('workflow arguments', () => {
         duplex: 'half',
       } as RequestInit);
 
-      const serialized = dehydrateWorkflowArguments(request, []);
+      const serialized = dehydrateWorkflowArguments(request, [], mockRunId);
       expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -622,7 +628,7 @@ describe('workflow arguments', () => {
       const responseWritable = new WritableStream();
       request[Symbol.for('WEBHOOK_RESPONSE_WRITABLE')] = responseWritable;
 
-      const serialized = dehydrateWorkflowArguments(request, []);
+      const serialized = dehydrateWorkflowArguments(request, [], mockRunId);
       expect(serialized).toMatchInlineSnapshot(`
       [
         [
@@ -724,7 +730,7 @@ describe('workflow arguments', () => {
     class Foo {}
     let err: WorkflowRuntimeError | undefined;
     try {
-      dehydrateWorkflowArguments(new Foo(), []);
+      dehydrateWorkflowArguments(new Foo(), [], mockRunId);
     } catch (err_) {
       err = err_ as WorkflowRuntimeError;
     }
@@ -772,7 +778,7 @@ describe('step return value', () => {
     class Foo {}
     let err: WorkflowRuntimeError | undefined;
     try {
-      dehydrateStepReturnValue(new Foo(), []);
+      dehydrateStepReturnValue(new Foo(), [], mockRunId);
     } catch (err_) {
       err = err_ as WorkflowRuntimeError;
     }
@@ -781,5 +787,213 @@ describe('step return value', () => {
     expect(err?.message).toContain(
       `Ensure you're returning serializable types (plain objects, arrays, primitives, Date, RegExp, Map, Set).`
     );
+  });
+});
+
+describe('step function serialization', () => {
+  const { globalThis: vmGlobalThis } = createContext({
+    seed: 'test',
+    fixedTimestamp: 1714857600000,
+  });
+
+  it('should detect step function by checking for stepId property', () => {
+    const stepName = 'myStep';
+    const stepFn = async (x: number) => x * 2;
+
+    // Attach stepId like useStep() does
+    Object.defineProperty(stepFn, 'stepId', {
+      value: stepName,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+
+    // Verify the property is attached correctly
+    expect((stepFn as any).stepId).toBe(stepName);
+  });
+
+  it('should not have stepId on regular functions', () => {
+    const regularFn = async (x: number) => x * 2;
+
+    // Regular functions should not have stepId
+    expect((regularFn as any).stepId).toBeUndefined();
+  });
+
+  it('should lookup registered step function by name', () => {
+    const stepName = 'myRegisteredStep';
+    const stepFn = async (x: number) => x * 2;
+
+    // Register the step function
+    registerStepFunction(stepName, stepFn);
+
+    // Should be retrievable by name
+    const retrieved = getStepFunction(stepName);
+    expect(retrieved).toBe(stepFn);
+  });
+
+  it('should return undefined for non-existent registered step function', () => {
+    const retrieved = getStepFunction('nonExistentStep');
+    expect(retrieved).toBeUndefined();
+  });
+
+  it('should deserialize step function name through reviver', () => {
+    const stepName = 'testStep';
+    const stepFn = async () => 42;
+
+    // Register the step function
+    registerStepFunction(stepName, stepFn);
+
+    // Get the reviver and test it directly
+    const revivers = getCommonRevivers(vmGlobalThis);
+    const result = revivers.StepFunction({ stepId: stepName });
+
+    expect(result).toBe(stepFn);
+  });
+
+  it('should throw error when reviver cannot find registered step function', () => {
+    const revivers = getCommonRevivers(vmGlobalThis);
+
+    let err: Error | undefined;
+    try {
+      revivers.StepFunction({ stepId: 'nonExistentStep' });
+    } catch (err_) {
+      err = err_ as Error;
+    }
+
+    expect(err).toBeDefined();
+    expect(err?.message).toContain('Step function "nonExistentStep" not found');
+    expect(err?.message).toContain('Make sure the step function is registered');
+  });
+
+  it('should dehydrate step function passed as argument to a step', () => {
+    const stepName = 'step//workflows/test.ts//myStep';
+    const stepFn = async (x: number) => x * 2;
+
+    // Register the step function
+    registerStepFunction(stepName, stepFn);
+
+    // Attach stepId to the function (like useStep() does)
+    Object.defineProperty(stepFn, 'stepId', {
+      value: stepName,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+
+    // Simulate passing a step function as an argument within a workflow
+    // When calling a step from within a workflow context
+    const args = [stepFn, 42];
+
+    // This should serialize the step function by its name using the reducer
+    const dehydrated = dehydrateStepArguments(args, globalThis);
+
+    // Verify it dehydrated successfully
+    expect(dehydrated).toBeDefined();
+    expect(Array.isArray(dehydrated)).toBe(true);
+    // The dehydrated structure is the flattened format from devalue
+    // It should contain the step function serialized as its name
+    expect(dehydrated).toContain(stepName);
+    expect(dehydrated).toContain(42);
+  });
+
+  it('should dehydrate and hydrate step function with closure variables', async () => {
+    const stepName = 'step//workflows/test.ts//calculate';
+
+    // Create a step function that accesses closure variables
+    const { __private_getClosureVars } = await import('./private.js');
+    const { contextStorage } = await import('./step/context-storage.js');
+
+    const stepFn = async (x: number) => {
+      const { multiplier, prefix } = __private_getClosureVars();
+      const result = x * multiplier;
+      return `${prefix}${result}`;
+    };
+
+    // Register the step function
+    registerStepFunction(stepName, stepFn);
+
+    // Simulate what useStep() does - attach stepId and closure vars function
+    Object.defineProperty(stepFn, 'stepId', {
+      value: stepName,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+
+    const closureVars = { multiplier: 3, prefix: 'Result: ' };
+    Object.defineProperty(stepFn, '__closureVarsFn', {
+      value: () => closureVars,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+
+    // Serialize the step function with closure variables
+    const args = [stepFn, 7];
+    const dehydrated = dehydrateStepArguments(args, globalThis);
+
+    // Verify it serialized
+    expect(dehydrated).toBeDefined();
+    const serialized = JSON.stringify(dehydrated);
+    expect(serialized).toContain(stepName);
+    expect(serialized).toContain('multiplier');
+    expect(serialized).toContain('prefix');
+
+    // Now hydrate it back
+    const hydrated = hydrateStepArguments(
+      dehydrated,
+      [],
+      'test-run-123',
+      vmGlobalThis
+    );
+    expect(Array.isArray(hydrated)).toBe(true);
+    expect(hydrated).toHaveLength(2);
+
+    const hydratedStepFn = hydrated[0];
+    const hydratedArg = hydrated[1];
+
+    expect(typeof hydratedStepFn).toBe('function');
+    expect(hydratedArg).toBe(7);
+
+    // Invoke the hydrated step function within a context
+    const result = await contextStorage.run(
+      {
+        stepMetadata: {
+          stepId: 'test-step',
+          stepStartedAt: new Date(),
+          attempt: 1,
+        },
+        workflowMetadata: {
+          workflowRunId: 'test-run',
+          workflowStartedAt: new Date(),
+          url: 'http://localhost:3000',
+        },
+        ops: [],
+      },
+      () => hydratedStepFn(7)
+    );
+
+    // Verify the closure variables were accessible and used correctly
+    expect(result).toBe('Result: 21');
+  });
+
+  it('should serialize step function to object through reducer', () => {
+    const stepName = 'step//workflows/test.ts//anotherStep';
+    const stepFn = async () => 'result';
+
+    // Attach stepId to the function (like useStep() does)
+    Object.defineProperty(stepFn, 'stepId', {
+      value: stepName,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+
+    // Get the reducer and verify it detects the step function
+    const reducer = getWorkflowReducers(globalThis).StepFunction;
+    const result = reducer(stepFn);
+
+    // Should return object with stepId
+    expect(result).toEqual({ stepId: stepName });
   });
 });

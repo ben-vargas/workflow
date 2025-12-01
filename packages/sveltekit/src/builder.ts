@@ -19,14 +19,16 @@ async function convertSvelteKitRequest(request) {
 
 export class SvelteKitBuilder extends BaseBuilder {
   constructor(config?: Partial<SvelteKitConfig>) {
+    const workingDir = config?.workingDir || process.cwd();
+
     super({
       ...config,
-      dirs: ['workflows'],
+      dirs: ['workflows', 'src/workflows', 'routes', 'src/routes'],
       buildTarget: 'sveltekit' as const,
       stepsBundlePath: '', // unused in base
       workflowsBundlePath: '', // unused in base
       webhookBundlePath: '', // unused in base
-      workingDir: config?.workingDir || process.cwd(),
+      workingDir,
     });
   }
 
@@ -159,10 +161,6 @@ export const POST = async ({request}) => {
 
     // Post-process the generated file to wrap with SvelteKit request converter
     let webhookRouteContent = await readFile(webhookRouteFile, 'utf-8');
-
-    // NOTE: This is a workaround to avoid crashing in local dev when context isn't set for waitUntil()
-    webhookRouteContent = `process.on('unhandledRejection', (reason) => { if (reason !== undefined) console.error('Unhandled rejection detected', reason); });
-${webhookRouteContent}`;
 
     // Update handler signature to accept token as parameter
     webhookRouteContent = webhookRouteContent.replace(

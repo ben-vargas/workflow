@@ -2,12 +2,9 @@
 title: DurableAgent
 ---
 
-import { ExperimentalPackageCallout } from "@/components/experimental-package-callout"
-import { generateDefinition } from "@/lib/tsdoc"
-
-# `DurableAgent`
-
-<ExperimentalPackageCallout packageName="@workflow/ai" />
+<Callout type="warn">
+The `@workflow/ai` package is currently in active development and should be considered experimental.
+</Callout>
 
 The `DurableAgent` class enables you to create AI-powered agents that can maintain state across workflow steps, call tools, and gracefully handle interruptions and resumptions.
 
@@ -15,7 +12,9 @@ Tool calls can be implemented as workflow steps for automatic retries, or as reg
 
 ```typescript lineNumbers
 import { DurableAgent } from '@workflow/ai/agent';
+import { getWritable } from 'workflow';
 import { z } from 'zod';
+import type { UIMessageChunk } from 'ai';
 
 async function getWeather({ city }: { city: string }) {
   "use step";
@@ -38,8 +37,13 @@ async function myAgent() {
     },
   });
 
+  // The agent will stream its output to the workflow
+  // run's default output stream
+  const writable = getWritable<UIMessageChunk>();
+
   await agent.stream({
     messages: [{ role: 'user', content: 'How is the weather in San Francisco?' }],
+    writable,
   });
 }
 ```
@@ -49,31 +53,25 @@ async function myAgent() {
 ### Class
 
 <TSDoc
-definition={generateDefinition({
-  code: `
+definition={`
 import { DurableAgent } from "@workflow/ai/agent";
-export default DurableAgent;`
-})}
+export default DurableAgent;`}
 />
 
 ### DurableAgentOptions
 
 <TSDoc
-definition={generateDefinition({
-  code: `
+definition={`
 import type { DurableAgentOptions } from "@workflow/ai/agent";
-export default DurableAgentOptions;`
-})}
+export default DurableAgentOptions;`}
 />
 
 ### DurableAgentStreamOptions
 
 <TSDoc
-definition={generateDefinition({
-  code: `
+definition={`
 import type { DurableAgentStreamOptions } from "@workflow/ai/agent";
-export default DurableAgentStreamOptions;`
-})}
+export default DurableAgentStreamOptions;`}
 />
 
 ## Key Features
@@ -88,7 +86,7 @@ export default DurableAgentStreamOptions;`
 - Tools can be implemented as workflow steps (using `"use step"` for automatic retries), or as regular workflow-level logic
 - Tools can use core library features like `sleep()` and Hooks within their `execute` functions
 - The agent processes tool calls iteratively until completion
-- When no custom `writable` stream is provided, the agent uses the workflow's default writable stream
+- The `stream()` method returns `{ messages }` containing the full conversation history, including initial messages, assistant responses, and tool results
 
 ## Examples
 
@@ -96,7 +94,9 @@ export default DurableAgentStreamOptions;`
 
 ```typescript
 import { DurableAgent } from '@workflow/ai/agent';
+import { getWritable } from 'workflow';
 import { z } from 'zod';
+import type { UIMessageChunk } from 'ai';
 
 async function getWeather({ location }: { location: string }) {
   "use step";
@@ -127,6 +127,7 @@ async function weatherAgentWorkflow(userQuery: string) {
         content: userQuery,
       },
     ],
+    writable: getWritable<UIMessageChunk>(),
   });
 }
 ```
@@ -135,7 +136,9 @@ async function weatherAgentWorkflow(userQuery: string) {
 
 ```typescript
 import { DurableAgent } from '@workflow/ai/agent';
+import { getWritable } from 'workflow';
 import { z } from 'zod';
+import type { UIMessageChunk } from 'ai';
 
 async function getWeather({ location }: { location: string }) {
   "use step";
@@ -173,7 +176,60 @@ async function multiToolAgentWorkflow(userQuery: string) {
         content: userQuery,
       },
     ],
+    writable: getWritable<UIMessageChunk>(),
   });
+}
+```
+
+### Multi-turn Conversation
+
+```typescript
+import { DurableAgent } from '@workflow/ai/agent';
+import { z } from 'zod';
+
+async function searchProducts({ query }: { query: string }) {
+  "use step";
+  // Search product database
+  return `Found 3 products matching "${query}"`;
+}
+
+async function multiTurnAgentWorkflow() {
+  'use workflow';
+
+  const agent = new DurableAgent({
+    model: 'anthropic/claude-haiku-4.5',
+    tools: {
+      searchProducts: {
+        description: 'Search for products',
+        inputSchema: z.object({ query: z.string() }),
+        execute: searchProducts,
+      },
+    },
+  });
+
+  const writable = getWritable<UIMessageChunk>();
+
+  // First user message
+  //   - Result is streamed to the provided `writable` stream
+  //   - Message history is returned in `messages` for LLM context
+  let { messages } = await agent.stream({
+    messages: [
+      { role: 'user', content: 'Find me some laptops' }
+    ],
+    writable,
+  });
+
+  // Continue the conversation with the accumulated message history
+  const result = await agent.stream({
+    messages: [
+      ...messages,
+      { role: 'user', content: 'Which one has the best battery life?' }
+    ],
+    writable,
+  });
+
+  // result.messages now contains the complete conversation history
+  return result.messages;
 }
 ```
 
@@ -181,8 +237,9 @@ async function multiToolAgentWorkflow(userQuery: string) {
 
 ```typescript
 import { DurableAgent } from '@workflow/ai/agent';
-import { sleep, defineHook } from 'workflow';
+import { sleep, defineHook, getWritable } from 'workflow';
 import { z } from 'zod';
+import type { UIMessageChunk } from 'ai';
 
 // Define a reusable hook type
 const approvalHook = defineHook<{ approved: boolean; reason: string }>();
@@ -238,6 +295,7 @@ async function agentWithLibraryFeaturesWorkflow(userRequest: string) {
 
   await agent.stream({
     messages: [{ role: 'user', content: userRequest }],
+    writable: getWritable<UIMessageChunk>(),
   });
 }
 ```

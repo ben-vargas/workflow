@@ -491,3 +491,71 @@ export async function hookCleanupTestWorkflow(
     hookCleanupTestData: 'workflow_completed',
   };
 }
+
+//////////////////////////////////////////////////////////
+
+export async function stepFunctionPassingWorkflow() {
+  'use workflow';
+  // Pass a step function reference to another step (without closure vars)
+  const result = await stepWithStepFunctionArg(doubleNumber);
+  return result;
+}
+
+async function stepWithStepFunctionArg(stepFn: (x: number) => Promise<number>) {
+  'use step';
+  // Call the passed step function reference
+  const result = await stepFn(10);
+  return result * 2;
+}
+
+async function doubleNumber(x: number) {
+  'use step';
+  return x * 2;
+}
+
+//////////////////////////////////////////////////////////
+
+export async function stepFunctionWithClosureWorkflow() {
+  'use workflow';
+  const multiplier = 3;
+  const prefix = 'Result: ';
+
+  // Create a step function that captures closure variables
+  const calculate = async (x: number) => {
+    'use step';
+    return `${prefix}${x * multiplier}`;
+  };
+
+  // Pass the step function (with closure vars) to another step
+  const result = await stepThatCallsStepFn(calculate, 7);
+  return result;
+}
+
+async function stepThatCallsStepFn(
+  stepFn: (x: number) => Promise<string>,
+  value: number
+) {
+  'use step';
+  // Call the passed step function - closure vars should be preserved
+  const result = await stepFn(value);
+  return `Wrapped: ${result}`;
+}
+
+//////////////////////////////////////////////////////////
+
+export async function closureVariableWorkflow(baseValue: number) {
+  'use workflow';
+  // biome-ignore lint/style/useConst: Intentionally using `let` instead of `const`
+  let multiplier = 3;
+  const prefix = 'Result: ';
+
+  // Nested step function that uses closure variables
+  const calculate = async () => {
+    'use step';
+    const result = baseValue * multiplier;
+    return `${prefix}${result}`;
+  };
+
+  const output = await calculate();
+  return output;
+}

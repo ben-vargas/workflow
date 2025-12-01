@@ -197,13 +197,7 @@ export class Run<TResult> {
         const run = await this.world.runs.get(this.runId);
 
         if (run.status === 'completed') {
-          return hydrateWorkflowReturnValue(
-            run.output,
-            [],
-            globalThis,
-            {},
-            this.runId
-          );
+          return hydrateWorkflowReturnValue(run.output, [], this.runId);
         }
 
         if (run.status === 'cancelled') {
@@ -395,8 +389,11 @@ export function workflowEntrypoint(workflowCode: string) {
                 if (queueItem.type === 'step') {
                   // Handle step operations
                   const ops: Promise<void>[] = [];
-                  const dehydratedArgs = dehydrateStepArguments(
-                    queueItem.args,
+                  const dehydratedInput = dehydrateStepArguments(
+                    {
+                      args: queueItem.args,
+                      closureVars: queueItem.closureVars,
+                    },
                     err.globalThis
                   );
 
@@ -404,10 +401,18 @@ export function workflowEntrypoint(workflowCode: string) {
                     const step = await world.steps.create(runId, {
                       stepId: queueItem.correlationId,
                       stepName: queueItem.stepName,
-                      input: dehydratedArgs as Serializable[],
+                      input: dehydratedInput as Serializable,
                     });
 
-                    waitUntil(Promise.all(ops));
+                    waitUntil(
+                      Promise.all(ops).catch((err) => {
+                        // Ignore expected client disconnect errors (e.g., browser refresh during streaming)
+                        const isAbortError =
+                          err?.name === 'AbortError' ||
+                          err?.name === 'ResponseAborted';
+                        if (!isAbortError) throw err;
+                      })
+                    );
 
                     await world.queue(
                       `__wkf_step_${queueItem.stepName}`,
@@ -646,12 +651,13 @@ export const stepEntrypoint =
           let result: unknown;
           const attempt = step.attempt + 1;
           try {
-            if (step.status !== 'pending') {
-              // We should only be running the step if it's pending
-              // (initial state, or state set on re-try), so the step has been
-              // invoked erroneously.
+            if (!['pending', 'running'].includes(step.status)) {
+              // We should only be running the step if it's either
+              // a) pending - initial state, or state set on re-try
+              // b) running - if a step fails mid-execution, like a function timeout
+              // otherwise, the step has been invoked erroneously
               console.error(
-                `[Workflows] "${workflowRunId}" - Step invoked erroneously, expected status "pending", got "${step.status}" instead, skipping execution`
+                `[Workflows] "${workflowRunId}" - Step invoked erroneously, expected status "pending" or "running", got "${step.status}" instead, skipping execution`
               );
               span?.setAttributes({
                 ...Attribute.StepSkipped(true),
@@ -675,15 +681,15 @@ export const stepEntrypoint =
                 `Step "${stepId}" has no "startedAt" timestamp`
               );
             }
-            // Hydrate the step input arguments
+            // Hydrate the step input arguments and closure variables
             const ops: Promise<void>[] = [];
-            const args = hydrateStepArguments(
+            const hydratedInput = hydrateStepArguments(
               step.input,
               ops,
-              globalThis,
-              {},
               workflowRunId
             );
+
+            const args = hydratedInput.args;
 
             span?.setAttributes({
               ...Attribute.StepArgumentsCount(args.length),
@@ -706,31 +712,41 @@ export const stepEntrypoint =
                     : `http://localhost:${port ?? 3000}`,
                 },
                 ops,
+                closureVars: hydratedInput.closureVars,
               },
-              () => stepFn(...args)
+              () => stepFn.apply(null, args)
             );
 
-            result = dehydrateStepReturnValue(
-              result,
-              ops,
-              globalThis,
-              workflowRunId
+            // NOTE: None of the code from this point is guaranteed to run
+            // Since the step might fail or cause a function timeout and the process might be SIGKILL'd
+            // The workflow runtime must be resilient to the below code not executing on a failed step
+            result = dehydrateStepReturnValue(result, ops, workflowRunId);
+
+            waitUntil(
+              Promise.all(ops).catch((err) => {
+                // Ignore expected client disconnect errors (e.g., browser refresh during streaming)
+                const isAbortError =
+                  err?.name === 'AbortError' || err?.name === 'ResponseAborted';
+                if (!isAbortError) throw err;
+              })
             );
 
-            waitUntil(Promise.all(ops));
+            // Mark the step as completed first. This order is important. If a concurrent
+            // execution marked the step as complete, this request should throw, and
+            // this prevent the step_completed event in the event log
+            // TODO: this should really be atomic and handled by the world
+            await world.steps.update(workflowRunId, stepId, {
+              status: 'completed',
+              output: result as Serializable,
+            });
 
-            // Update the event log with the step result
+            // Then, append the event log with the step result
             await world.events.create(workflowRunId, {
               eventType: 'step_completed',
               correlationId: stepId,
               eventData: {
                 result: result as Serializable,
               },
-            });
-
-            await world.steps.update(workflowRunId, stepId, {
-              status: 'completed',
-              output: result as Serializable,
             });
 
             span?.setAttributes({

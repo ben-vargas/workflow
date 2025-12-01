@@ -1,5 +1,79 @@
 # @workflow/world-testing
 
+## 4.0.1-beta.23
+
+### Patch Changes
+
+- Updated dependencies [fb9fd0f]
+- Updated dependencies [6dd1750]
+  - @workflow/world@4.0.1-beta.7
+  - workflow@4.0.1-beta.22
+  - @workflow/cli@4.0.1-beta.22
+
+## 4.0.1-beta.22
+
+### Patch Changes
+
+- @workflow/cli@4.0.1-beta.21
+- workflow@4.0.1-beta.21
+
+## 4.0.1-beta.21
+
+### Patch Changes
+
+- @workflow/cli@4.0.1-beta.20
+- workflow@4.0.1-beta.20
+
+## 4.0.1-beta.20
+
+### Patch Changes
+
+- @workflow/cli@4.0.1-beta.19
+- workflow@4.0.1-beta.19
+
+## 4.0.1-beta.19
+
+### Patch Changes
+
+- @workflow/cli@4.0.1-beta.18
+- workflow@4.0.1-beta.18
+
+## 4.0.1-beta.18
+
+### Patch Changes
+
+- @workflow/cli@4.0.1-beta.17
+- workflow@4.0.1-beta.17
+
+## 4.0.1-beta.17
+
+### Patch Changes
+
+- @workflow/cli@4.0.1-beta.16
+- workflow@4.0.1-beta.16
+
+## 4.0.1-beta.16
+
+### Patch Changes
+
+- Updated dependencies [4b70739]
+  - @workflow/world@4.0.1-beta.6
+  - @workflow/cli@4.0.1-beta.15
+  - workflow@4.0.1-beta.15
+
+## 4.0.1-beta.15
+
+### Patch Changes
+
+- b97b6bf: Lock all dependencies in our packages
+- Updated dependencies [b97b6bf]
+- Updated dependencies [6419962]
+- Updated dependencies [9335026]
+- Updated dependencies [00b0bb9]
+  - workflow@4.0.1-beta.14
+  - @workflow/cli@4.0.1-beta.14
+  - @workflow/world@4.0.1-beta.5
+
 ## 4.0.1-beta.14
 
 ### Patch Changes
