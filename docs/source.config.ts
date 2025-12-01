@@ -21,19 +21,6 @@ export const docs = defineDocs({
   },
 });
 
-export const guides = defineDocs({
-  dir: 'content/guides',
-  docs: {
-    schema: frontmatterSchema,
-    postprocess: {
-      includeProcessedMarkdown: true,
-    },
-  },
-  meta: {
-    schema: metaSchema,
-  },
-});
-
 export default defineConfig({
   mdxOptions: {
     remarkPlugins: [remarkMdxMermaid],
