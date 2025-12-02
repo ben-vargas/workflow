@@ -144,14 +144,15 @@ _This PR was last updated in response to the \`/run-ci\` command in #${prDetails
                 });
               } else {
                 // Existing PR found but it's not labeled as a CI test PR
-                // Treat it as a new PR scenario
-                isNewPR = true;
+                // Use the first one and add the labels
+                ciPR = existingPRs.data[0];
+                isNewPR = true; // Treat as new to ensure labels are added
               }
             }
             
-            if (isNewPR || existingPRs.data.length === 0) {
+            if (!ciPR) {
               // Create a new draft PR
-              ciPR = await github.rest.pulls.create({
+              const newPR = await github.rest.pulls.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: `[CI Test] ${prDetails.title}`,
@@ -172,11 +173,12 @@ This is an automated PR created to run CI tests for PR #${prDetails.number} by @
 _This PR was created in response to the \`/run-ci\` command in #${prDetails.number}_`,
                 draft: true
               });
+              ciPR = newPR.data;
               isNewPR = true;
             }
             
             // Ensure labels are present on the CI PR (handles both new and existing PRs)
-            const currentLabels = ciPR.labels?.map(l => l.name) || [];
+            const currentLabels = ciPR.labels?.map(l => typeof l === 'string' ? l : l.name) || [];
             const requiredLabels = ['ci-test', 'automated'];
             const missingLabels = requiredLabels.filter(label => !currentLabels.includes(label));
             
