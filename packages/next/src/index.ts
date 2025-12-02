@@ -2,6 +2,24 @@ import type { NextConfig } from 'next';
 import semver from 'semver';
 import { getNextBuilder } from './builder.js';
 
+/**
+ * Loads server-external-packages from Next.js installation
+ * Supports both .jsonc (16.0-canary+) and .json (older versions)
+ */
+function loadServerExternalPackages(): string[] {
+  try {
+    // Try .jsonc first (Next.js 16.0-canary and above)
+    return require(
+      require.resolve('next/dist/lib/server-external-packages.jsonc')
+    );
+  } catch {
+    // Fall back to .json (older Next.js versions)
+    return require(
+      require.resolve('next/dist/lib/server-external-packages.json')
+    );
+  }
+}
+
 export function withWorkflow(
   nextConfigOrFn:
     | NextConfig
@@ -120,7 +138,7 @@ export function withWorkflow(
         stepsBundlePath: '', // not used in base
         webhookBundlePath: '', // node used in base
         externalPackages: [
-          ...require('next/dist/lib/server-external-packages.json'),
+          ...loadServerExternalPackages(),
           ...(nextConfig.serverExternalPackages || []),
         ],
       });
