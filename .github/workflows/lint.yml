@@ -42,5 +42,5 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Validate docs links
-        run: bun ./scripts/lint.ts
+        run: pnpm run lint:docs
         working-directory: docs

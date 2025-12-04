@@ -9,8 +9,9 @@ interface SyntaxError {
   code: string;
 }
 
+// Match code blocks - meta must be on same line as language (space, not newline)
 const CODE_BLOCK_REGEX =
-  /```(ts|tsx|js|jsx|typescript|javascript)(?:\s+([^\n]*))?\n([\s\S]*?)```/g;
+  /```(ts|tsx|js|jsx|typescript|javascript)(?: +([^\n]*))?\n([\s\S]*?)```/g;
 
 function extractCodeBlocks(
   content: string
@@ -141,25 +142,37 @@ async function checkTsExamples() {
     return true;
   });
 
+  // Group errors by file
+  const errorsByFile = new Map<string, typeof uniqueErrors>();
+  for (const error of uniqueErrors) {
+    const existing = errorsByFile.get(error.file) || [];
+    existing.push(error);
+    errorsByFile.set(error.file, existing);
+  }
+
+  const green = (s: string) => `\x1b[32m\x1b[1m${s}\x1b[0m`;
+  const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
+
   if (uniqueErrors.length > 0) {
-    console.error('\n❌ Found syntax errors in code blocks:\n');
-
-    for (const error of uniqueErrors) {
-      console.error(`  ${error.file}`);
-      console.error(
-        `    Code block starting at line ${error.codeBlockLine}, error at line ${error.lineInBlock}:`
-      );
-      console.error(`    ${error.message}`);
-      if (error.code) {
-        console.error(`    > ${error.code}`);
+    console.error();
+    for (const [file, errors] of errorsByFile) {
+      console.error(`Syntax errors in ${file}:`);
+      for (const error of errors) {
+        console.error(
+          `  ${red(error.message)}: at code block line ${error.codeBlockLine}, error line ${error.lineInBlock}`
+        );
       }
-      console.error();
     }
-
-    console.error(`\n${uniqueErrors.length} syntax error(s) found.\n`);
+    console.log('------');
+    console.error(
+      red(
+        `${errorsByFile.size} errored file${errorsByFile.size === 1 ? '' : 's'}, ${uniqueErrors.length} error${uniqueErrors.length === 1 ? '' : 's'}`
+      )
+    );
+    console.error();
     process.exit(1);
   } else {
-    console.log('✅ All code blocks have valid syntax.');
+    console.log(green('0 errored files, 0 errors'));
   }
 }
 

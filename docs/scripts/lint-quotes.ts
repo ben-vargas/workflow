@@ -9,8 +9,9 @@ interface QuoteIssue {
   suggestion: string;
 }
 
+// Match code blocks - meta must be on same line as language (space, not newline)
 const CODE_BLOCK_REGEX =
-  /```(ts|tsx|js|jsx|typescript|javascript)(?:\s+([^\n]*))?\n([\s\S]*?)```/g;
+  /```(ts|tsx|js|jsx|typescript|javascript)(?: +([^\n]*))?\n([\s\S]*?)```/g;
 
 function extractCodeBlocks(
   content: string
@@ -137,23 +138,37 @@ async function checkQuotes() {
     }
   }
 
+  // Group issues by file
+  const issuesByFile = new Map<string, typeof allIssues>();
+  for (const issue of allIssues) {
+    const existing = issuesByFile.get(issue.file) || [];
+    existing.push(issue);
+    issuesByFile.set(issue.file, existing);
+  }
+
+  const green = (s: string) => `\x1b[32m\x1b[1m${s}\x1b[0m`;
+  const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
+
   if (allIssues.length > 0) {
-    console.error('\n❌ Found single-quoted strings in code blocks:\n');
-
-    for (const issue of allIssues) {
-      console.error(`  ${issue.file}`);
-      console.error(
-        `    Line ${issue.codeBlockLine + issue.lineInBlock}: ${issue.text}`
-      );
-      console.error(`    Suggestion: ${issue.suggestion}\n`);
+    console.error();
+    for (const [file, issues] of issuesByFile) {
+      console.error(`Single-quoted strings in ${file}:`);
+      for (const issue of issues) {
+        console.error(
+          `  ${red(issue.text)} → ${issue.suggestion}: at line ${issue.codeBlockLine + issue.lineInBlock}`
+        );
+      }
     }
-
+    console.log('------');
     console.error(
-      `\n${allIssues.length} issue(s) found. Use double quotes for strings in code examples.\n`
+      red(
+        `${issuesByFile.size} errored file${issuesByFile.size === 1 ? '' : 's'}, ${allIssues.length} error${allIssues.length === 1 ? '' : 's'}`
+      )
     );
+    console.error();
     process.exit(1);
   } else {
-    console.log('✓ All code blocks use double quotes for strings.');
+    console.log(green('0 errored files, 0 errors'));
   }
 }
 

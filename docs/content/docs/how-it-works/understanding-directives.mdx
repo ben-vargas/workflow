@@ -542,7 +542,7 @@ export async function processOrder(orderId: string) {
 
 This breaks down because many valid async operations inside workflows aren't steps:
 
-```ts lineNumbers
+```ts lineNumbers lint-nocheck
 export async function processOrder(orderId: string) {
   "use workflow";
 

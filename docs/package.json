@@ -10,10 +10,10 @@
     "postinstall": "fumadocs-mdx",
     "postbuild": "node scripts/pack.ts",
     "lint": "biome check",
-    "lint:links": "bun ./scripts/lint.ts",
+    "lint:links": "bun ./scripts/lint-links.ts",
     "lint:quotes": "bun ./scripts/lint-quotes.ts",
     "lint:ts-examples": "bun ./scripts/lint-ts-examples.ts",
-    "lint:docs": "bun ./scripts/lint.ts && bun ./scripts/lint-quotes.ts && bun ./scripts/lint-ts-examples.ts",
+    "lint:docs": "bun ./scripts/lint-links.ts && bun ./scripts/lint-quotes.ts && bun ./scripts/lint-ts-examples.ts",
     "format": "biome format --write"
   },
   "dependencies": {

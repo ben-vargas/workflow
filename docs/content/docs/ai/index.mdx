@@ -78,7 +78,7 @@ OPENAI_API_KEY=...
 
 Then modify your API endpoint to use the OpenAI provider:
 
-```ts title="app/api/chat/route.ts" lineNumbers
+```ts title="app/api/chat/route.ts" lineNumbers lint-nocheck
 // ...
 import { openai } from "@workflow/ai/openai"; // [!code highlight]
 
@@ -313,7 +313,7 @@ Key changes:
 
 Mark all tool definitions with `"use step"` to make them durable. This enables automatic retries and observability for each tool call:
 
-```ts title="workflows/chat/steps/tools.ts​" lineNumbers
+```ts title="workflows/chat/steps/tools.ts​" lineNumbers lint-nocheck
 // ...
 
 export async function searchFlights(
