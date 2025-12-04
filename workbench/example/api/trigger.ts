@@ -1,4 +1,8 @@
 import { getRun, start } from 'workflow/api';
+import {
+  WorkflowRunFailedError,
+  WorkflowRunNotCompletedError,
+} from 'workflow/internal/errors';
 import { hydrateWorkflowArguments } from 'workflow/internal/serialization';
 import workflowManifest from '../manifest.js';
 
@@ -37,7 +41,7 @@ export async function POST(req: Request) {
       workflowFileItems[workflowFn as keyof typeof workflowFileItems],
       args
     );
-    console.log('Run:', run);
+    console.log('Run:', run.runId);
     return Response.json(run);
   } catch (err) {
     console.error(`Failed to start!!`, err);
@@ -80,16 +84,28 @@ export async function GET(req: Request) {
     const run = getRun(runId);
     const returnValue = await run.returnValue;
     console.log('Return value:', returnValue);
+
+    // Include run metadata in headers
+    const [createdAt, startedAt, completedAt] = await Promise.all([
+      run.createdAt,
+      run.startedAt,
+      run.completedAt,
+    ]);
+    const headers: HeadersInit =
+      returnValue instanceof ReadableStream
+        ? { 'Content-Type': 'application/octet-stream' }
+        : {};
+
+    headers['X-Workflow-Run-Created-At'] = createdAt?.toISOString() || '';
+    headers['X-Workflow-Run-Started-At'] = startedAt?.toISOString() || '';
+    headers['X-Workflow-Run-Completed-At'] = completedAt?.toISOString() || '';
+
     return returnValue instanceof ReadableStream
-      ? new Response(returnValue, {
-          headers: {
-            'Content-Type': 'application/octet-stream',
-          },
-        })
-      : Response.json(returnValue);
+      ? new Response(returnValue, { headers })
+      : Response.json(returnValue, { headers });
   } catch (error) {
     if (error instanceof Error) {
-      if (error.name === 'WorkflowRunNotCompletedError') {
+      if (WorkflowRunNotCompletedError.is(error)) {
         return Response.json(
           {
             ...error,
@@ -100,12 +116,18 @@ export async function GET(req: Request) {
         );
       }
 
-      if (error.name === 'WorkflowRunFailedError') {
+      if (WorkflowRunFailedError.is(error)) {
+        const cause = error.cause;
         return Response.json(
           {
             ...error,
             name: error.name,
             message: error.message,
+            cause: {
+              message: cause.message,
+              stack: cause.stack,
+              code: cause.code,
+            },
           },
           { status: 400 }
         );

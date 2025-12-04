@@ -1,5 +1,32 @@
 # @workflow/web
 
+## 4.0.1-beta.12
+
+### Patch Changes
+
+- 109fe59: Add PostgreSQL backend support in web UI settings
+- 10c5b91: Update Next.js version to 16
+- 8d4562e: Rename leftover references to "embedded world" to be "local world"
+
+## 4.0.1-beta.11
+
+### Patch Changes
+
+- b97b6bf: Lock all dependencies in our packages
+
+## 4.0.1-beta.10
+
+### Patch Changes
+
+- 11469d8: Update default fallback path for connecting to local world
+- 00efdfb: Improve trace viewer load times and loading animation
+
+## 4.0.1-beta.9
+
+### Patch Changes
+
+- 0b3e89e: Fix event data serialization for observability
+
 ## 4.0.1-beta.8
 
 ### Patch Changes

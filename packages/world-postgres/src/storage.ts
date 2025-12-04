@@ -1,16 +1,148 @@
 import { WorkflowAPIError } from '@workflow/errors';
 import type {
   Event,
+  Hook,
   ListEventsParams,
   ListHooksParams,
   PaginatedResponse,
+  ResolveData,
+  Step,
   Storage,
+  UpdateStepRequest,
+  UpdateWorkflowRunRequest,
+  WorkflowRun,
+} from '@workflow/world';
+import {
+  EventSchema,
+  HookSchema,
+  StepSchema,
+  WorkflowRunSchema,
 } from '@workflow/world';
 import { and, desc, eq, gt, lt, sql } from 'drizzle-orm';
 import { monotonicFactory } from 'ulid';
 import { type Drizzle, Schema } from './drizzle/index.js';
 import type { SerializedContent } from './drizzle/schema.js';
 import { compact } from './util.js';
+
+/**
+ * Serialize a StructuredError object into a JSON string
+ */
+function serializeRunError(data: UpdateWorkflowRunRequest): any {
+  if (!data.error) {
+    return data;
+  }
+
+  const { error, ...rest } = data;
+  return {
+    ...rest,
+    error: JSON.stringify({
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+    }),
+  };
+}
+
+/**
+ * Deserialize error JSON string (or legacy flat fields) into a StructuredError object
+ * Handles backwards compatibility:
+ * - If error is a JSON string with {message, stack, code} → parse into StructuredError
+ * - If error is a plain string → treat as error message
+ * - If errorStack/errorCode exist (legacy) → combine into StructuredError
+ */
+function deserializeRunError(run: any): WorkflowRun {
+  const { error, errorStack, errorCode, ...rest } = run;
+
+  if (!error && !errorStack && !errorCode) {
+    return run as WorkflowRun;
+  }
+
+  // Try to parse as structured error JSON
+  if (error) {
+    try {
+      const parsed = JSON.parse(error);
+      if (typeof parsed === 'object' && parsed.message !== undefined) {
+        return {
+          ...rest,
+          error: {
+            message: parsed.message,
+            stack: parsed.stack,
+            code: parsed.code,
+          },
+        } as WorkflowRun;
+      }
+    } catch {
+      // Not JSON, treat as plain string
+    }
+  }
+
+  // Backwards compatibility: handle legacy separate fields or plain string error
+  return {
+    ...rest,
+    error: {
+      message: error || '',
+      stack: errorStack,
+      code: errorCode,
+    },
+  } as WorkflowRun;
+}
+
+/**
+ * Serialize a StructuredError object into a JSON string for steps
+ */
+function serializeStepError(data: UpdateStepRequest): any {
+  if (!data.error) {
+    return data;
+  }
+
+  const { error, ...rest } = data;
+  return {
+    ...rest,
+    error: JSON.stringify({
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+    }),
+  };
+}
+
+/**
+ * Deserialize error JSON string (or legacy flat fields) into a StructuredError object for steps
+ */
+function deserializeStepError(step: any): Step {
+  const { error, ...rest } = step;
+
+  if (!error) {
+    return step as Step;
+  }
+
+  // Try to parse as structured error JSON
+  if (error) {
+    try {
+      const parsed = JSON.parse(error);
+      if (typeof parsed === 'object' && parsed.message !== undefined) {
+        return {
+          ...rest,
+          error: {
+            message: parsed.message,
+            stack: parsed.stack,
+            code: parsed.code,
+          },
+        } as Step;
+      }
+    } catch {
+      // Not JSON, treat as plain string
+    }
+  }
+
+  // Backwards compatibility: handle legacy separate fields or plain string error
+  return {
+    ...rest,
+    error: {
+      message: error || '',
+    },
+  } as Step;
+}
 
 export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
   const ulid = monotonicFactory();
@@ -23,14 +155,20 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
     .prepare('workflow_runs_get');
 
   return {
-    async get(id) {
+    async get(id, params) {
       const [value] = await get.execute({ id });
       if (!value) {
         throw new WorkflowAPIError(`Run not found: ${id}`, { status: 404 });
       }
-      return compact(value);
+      value.output ||= value.outputJson;
+      value.input ||= value.inputJson;
+      value.executionContext ||= value.executionContextJson;
+      const deserialized = deserializeRunError(compact(value));
+      const parsed = WorkflowRunSchema.parse(deserialized);
+      const resolveData = params?.resolveData ?? 'all';
+      return filterRunData(parsed, resolveData);
     },
-    async cancel(id) {
+    async cancel(id, params) {
       // TODO: we might want to guard this for only specific statuses
       const [value] = await drizzle
         .update(Schema.runs)
@@ -40,9 +178,16 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
       if (!value) {
         throw new WorkflowAPIError(`Run not found: ${id}`, { status: 404 });
       }
-      return compact(value);
+
+      // Clean up all hooks for this run when cancelling
+      await drizzle.delete(Schema.hooks).where(eq(Schema.hooks.runId, id));
+
+      const deserialized = deserializeRunError(compact(value));
+      const parsed = WorkflowRunSchema.parse(deserialized);
+      const resolveData = params?.resolveData ?? 'all';
+      return filterRunData(parsed, resolveData);
     },
-    async pause(id) {
+    async pause(id, params) {
       // TODO: we might want to guard this for only specific statuses
       const [value] = await drizzle
         .update(Schema.runs)
@@ -52,9 +197,12 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
       if (!value) {
         throw new WorkflowAPIError(`Run not found: ${id}`, { status: 404 });
       }
-      return compact(value);
+      const deserialized = deserializeRunError(compact(value));
+      const parsed = WorkflowRunSchema.parse(deserialized);
+      const resolveData = params?.resolveData ?? 'all';
+      return filterRunData(parsed, resolveData);
     },
-    async resume(id) {
+    async resume(id, params) {
       // Fetch current run to check if startedAt is already set
       const [currentRun] = await drizzle
         .select()
@@ -85,7 +233,10 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
           status: 404,
         });
       }
-      return compact(value);
+      const deserialized = deserializeRunError(compact(value));
+      const parsed = WorkflowRunSchema.parse(deserialized);
+      const resolveData = params?.resolveData ?? 'all';
+      return filterRunData(parsed, resolveData);
     },
     async list(params) {
       const limit = params?.pagination?.limit ?? 20;
@@ -106,8 +257,13 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
       const values = all.slice(0, limit);
       const hasMore = all.length > limit;
 
+      const resolveData = params?.resolveData ?? 'all';
       return {
-        data: values.map(compact),
+        data: values.map((v) => {
+          const deserialized = deserializeRunError(compact(v));
+          const parsed = WorkflowRunSchema.parse(deserialized);
+          return filterRunData(parsed, resolveData);
+        }),
         hasMore,
         cursor: values.at(-1)?.runId ?? null,
       };
@@ -134,7 +290,7 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
           status: 409,
         });
       }
-      return compact(value);
+      return deserializeRunError(compact(value));
     },
     async update(id, data) {
       // Fetch current run to check if startedAt is already set
@@ -148,8 +304,11 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
         throw new WorkflowAPIError(`Run not found: ${id}`, { status: 404 });
       }
 
+      // Serialize the error field if present
+      const serialized = serializeRunError(data);
+
       const updates: Partial<typeof runs._.inferInsert> = {
-        ...data,
+        ...serialized,
         output: data.output as SerializedContent,
       };
 
@@ -157,11 +316,13 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
       if (data.status === 'running' && !currentRun.startedAt) {
         updates.startedAt = new Date();
       }
-      if (
+
+      const isBecomingTerminal =
         data.status === 'completed' ||
         data.status === 'failed' ||
-        data.status === 'cancelled'
-      ) {
+        data.status === 'cancelled';
+
+      if (isBecomingTerminal) {
         updates.completedAt = new Date();
       }
 
@@ -173,7 +334,13 @@ export function createRunsStorage(drizzle: Drizzle): Storage['runs'] {
       if (!value) {
         throw new WorkflowAPIError(`Run not found: ${id}`, { status: 404 });
       }
-      return compact(value);
+
+      // If transitioning to a terminal status, clean up all hooks for this run
+      if (isBecomingTerminal) {
+        await drizzle.delete(Schema.hooks).where(eq(Schema.hooks.runId, id));
+      }
+
+      return deserializeRunError(compact(value));
     },
   };
 }
@@ -187,7 +354,7 @@ export function createEventsStorage(drizzle: Drizzle): Storage['events'] {
   const { events } = Schema;
 
   return {
-    async create(runId, data) {
+    async create(runId, data, params) {
       const eventId = `wevt_${ulid()}`;
       const [value] = await drizzle
         .insert(events)
@@ -204,7 +371,10 @@ export function createEventsStorage(drizzle: Drizzle): Storage['events'] {
           status: 409,
         });
       }
-      return { ...data, ...value, runId, eventId };
+      const result = { ...data, ...value, runId, eventId };
+      const parsed = EventSchema.parse(result);
+      const resolveData = params?.resolveData ?? 'all';
+      return filterEventData(parsed, resolveData);
     },
     async list(params: ListEventsParams): Promise<PaginatedResponse<Event>> {
       const limit = params?.pagination?.limit ?? 100;
@@ -229,8 +399,13 @@ export function createEventsStorage(drizzle: Drizzle): Storage['events'] {
 
       const values = all.slice(0, limit);
 
+      const resolveData = params?.resolveData ?? 'all';
       return {
-        data: values.map(compact) as Event[],
+        data: values.map((v) => {
+          v.eventData ||= v.eventDataJson;
+          const parsed = EventSchema.parse(compact(v));
+          return filterEventData(parsed, resolveData);
+        }),
         cursor: values.at(-1)?.eventId ?? null,
         hasMore: all.length > limit,
       };
@@ -258,8 +433,13 @@ export function createEventsStorage(drizzle: Drizzle): Storage['events'] {
 
       const values = all.slice(0, limit);
 
+      const resolveData = params?.resolveData ?? 'all';
       return {
-        data: values.map(compact) as Event[],
+        data: values.map((v) => {
+          v.eventData ||= v.eventDataJson;
+          const parsed = EventSchema.parse(compact(v));
+          return filterEventData(parsed, resolveData);
+        }),
         cursor: values.at(-1)?.eventId ?? null,
         hasMore: all.length > limit,
       };
@@ -277,21 +457,25 @@ export function createHooksStorage(drizzle: Drizzle): Storage['hooks'] {
     .prepare('workflow_hooks_get_by_token');
 
   return {
-    async get(hookId) {
+    async get(hookId, params) {
       const [value] = await drizzle
         .select()
         .from(hooks)
         .where(eq(hooks.hookId, hookId))
         .limit(1);
-      return compact(value);
+      value.metadata ||= value.metadataJson;
+      const parsed = HookSchema.parse(compact(value));
+      const resolveData = params?.resolveData ?? 'all';
+      return filterHookData(parsed, resolveData);
     },
-    async create(runId, data) {
+    async create(runId, data, params) {
       const [value] = await drizzle
         .insert(hooks)
         .values({
           runId,
           hookId: data.hookId,
           token: data.token,
+          metadata: data.metadata as SerializedContent,
           ownerId: '', // TODO: get from context
           projectId: '', // TODO: get from context
           environment: '', // TODO: get from context
@@ -303,16 +487,22 @@ export function createHooksStorage(drizzle: Drizzle): Storage['hooks'] {
           status: 409,
         });
       }
-      return compact(value);
+      value.metadata ||= value.metadataJson;
+      const parsed = HookSchema.parse(compact(value));
+      const resolveData = params?.resolveData ?? 'all';
+      return filterHookData(parsed, resolveData);
     },
-    async getByToken(token) {
+    async getByToken(token, params) {
       const [value] = await getByToken.execute({ token });
       if (!value) {
         throw new WorkflowAPIError(`Hook not found for token: ${token}`, {
           status: 404,
         });
       }
-      return compact(value);
+      value.metadata ||= value.metadataJson;
+      const parsed = HookSchema.parse(compact(value));
+      const resolveData = params?.resolveData ?? 'all';
+      return filterHookData(parsed, resolveData);
     },
     async list(params: ListHooksParams) {
       const limit = params?.pagination?.limit ?? 100;
@@ -330,13 +520,19 @@ export function createHooksStorage(drizzle: Drizzle): Storage['hooks'] {
         .limit(limit + 1);
       const values = all.slice(0, limit);
       const hasMore = all.length > limit;
+
+      const resolveData = params?.resolveData ?? 'all';
       return {
-        data: values.map(compact),
+        data: values.map((v) => {
+          v.metadata ||= v.metadataJson;
+          const parsed = HookSchema.parse(compact(v));
+          return filterHookData(parsed, resolveData);
+        }),
         cursor: values.at(-1)?.hookId ?? null,
         hasMore,
       };
     },
-    async dispose(hookId) {
+    async dispose(hookId, params) {
       const [value] = await drizzle
         .delete(hooks)
         .where(eq(hooks.hookId, hookId))
@@ -346,7 +542,9 @@ export function createHooksStorage(drizzle: Drizzle): Storage['hooks'] {
           status: 404,
         });
       }
-      return compact(value);
+      const parsed = HookSchema.parse(compact(value));
+      const resolveData = params?.resolveData ?? 'all';
+      return filterHookData(parsed, resolveData);
     },
   };
 }
@@ -364,18 +562,20 @@ export function createStepsStorage(drizzle: Drizzle): Storage['steps'] {
           stepName: data.stepName,
           input: data.input as SerializedContent,
           status: 'pending',
-          attempt: 1,
+          attempt: 0,
         })
         .onConflictDoNothing()
         .returning();
+
       if (!value) {
         throw new WorkflowAPIError(`Step ${data.stepId} already exists`, {
           status: 409,
         });
       }
-      return compact(value);
+      return deserializeStepError(compact(value));
     },
-    async get(runId, stepId) {
+
+    async get(runId, stepId, params) {
       // If runId is not provided, query only by stepId
       const whereClause = runId
         ? and(eq(steps.stepId, stepId), eq(steps.runId, runId))
@@ -386,12 +586,17 @@ export function createStepsStorage(drizzle: Drizzle): Storage['steps'] {
         .from(steps)
         .where(whereClause)
         .limit(1);
+
       if (!value) {
         throw new WorkflowAPIError(`Step not found: ${stepId}`, {
           status: 404,
         });
       }
-      return compact(value);
+      value.output ||= value.outputJson;
+      const deserialized = deserializeStepError(compact(value));
+      const parsed = StepSchema.parse(deserialized);
+      const resolveData = params?.resolveData ?? 'all';
+      return filterStepData(parsed, resolveData);
     },
     async update(runId, stepId, data) {
       // Fetch current step to check if startedAt is already set
@@ -407,8 +612,11 @@ export function createStepsStorage(drizzle: Drizzle): Storage['steps'] {
         });
       }
 
+      // Serialize the error field if present
+      const serialized = serializeStepError(data);
+
       const updates: Partial<typeof steps._.inferInsert> = {
-        ...data,
+        ...serialized,
         output: data.output as SerializedContent,
       };
       const now = new Date();
@@ -429,7 +637,7 @@ export function createStepsStorage(drizzle: Drizzle): Storage['steps'] {
           status: 404,
         });
       }
-      return compact(value);
+      return deserializeStepError(compact(value));
     },
     async list(params) {
       const limit = params?.pagination?.limit ?? 20;
@@ -449,11 +657,55 @@ export function createStepsStorage(drizzle: Drizzle): Storage['steps'] {
       const values = all.slice(0, limit);
       const hasMore = all.length > limit;
 
+      const resolveData = params?.resolveData ?? 'all';
       return {
-        data: values.map(compact),
+        data: values.map((v) => {
+          const deserialized = deserializeStepError(compact(v));
+          const parsed = StepSchema.parse(deserialized);
+          return filterStepData(parsed, resolveData);
+        }),
         hasMore,
         cursor: values.at(-1)?.stepId ?? null,
       };
     },
   };
+}
+
+function filterStepData(step: Step, resolveData: ResolveData): Step {
+  if (resolveData === 'none') {
+    const { input: _, output: __, ...rest } = step;
+
+    return { input: [], output: undefined, ...rest };
+  }
+  return step;
+}
+
+function filterRunData(
+  run: WorkflowRun,
+  resolveData: ResolveData
+): WorkflowRun {
+  if (resolveData === 'none') {
+    const { input: _, output: __, ...rest } = run;
+
+    return { input: [], output: undefined, ...rest };
+  }
+  return run;
+}
+
+function filterHookData(hook: Hook, resolveData: ResolveData): Hook {
+  if (resolveData === 'none' && 'metadata' in hook) {
+    const { metadata: _, ...rest } = hook;
+
+    return { metadata: undefined, ...rest };
+  }
+  return hook;
+}
+
+function filterEventData(event: Event, resolveData: ResolveData): Event {
+  if (resolveData === 'none' && 'eventData' in event) {
+    const { eventData: _, ...rest } = event;
+
+    return rest as Event;
+  }
+  return event;
 }

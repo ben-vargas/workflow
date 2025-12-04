@@ -2,10 +2,6 @@
 title: fetch
 ---
 
-import { generateDefinition } from "@/lib/tsdoc"
-
-# `fetch()`
-
 Makes HTTP requests from within a workflow. This is a special step function that wraps the standard `fetch` API, automatically handling serialization and providing retry semantics.
 
 This is useful when you need to call external APIs or services from within your workflow.
@@ -33,11 +29,9 @@ async function apiWorkflow() {
 Accepts the same arguments as web [`fetch`](https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch)
 
 <TSDoc
-definition={generateDefinition({
-  code: `
+definition={`
 import { fetch } from "workflow";
-export default fetch;`
-})}
+export default fetch;`}
 showSections={['parameters']}
 />
 
@@ -46,11 +40,9 @@ showSections={['parameters']}
 Returns the same response as web [`fetch`](https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch)
 
 <TSDoc
-definition={generateDefinition({
-  code: `
+definition={`
 import { fetch } from "workflow";
-export default fetch;`
-})}
+export default fetch;`}
 showSections={['returns']}
 />
 
@@ -108,11 +100,18 @@ export async function customFetch(
             // Rate limited - retry with backoff from Retry-After header
             const retryAfter = response.headers.get("Retry-After")
 
-            // Use `RetryableError` to customize the retry
-            throw new RetryableError( // [!code highlight]
-                `Rate limited by ${url}`, // [!code highlight]
-                { retryAfter: `${retryAfter} seconds` } // [!code highlight]
-            ) // [!code highlight]
+            if (retryAfter) {
+                // The Retry-After header is either a number (seconds) or an RFC 7231 date string
+                const retryAfterValue = /^\d+$/.test(retryAfter)
+                    ? parseInt(retryAfter) * 1000  // Convert seconds to milliseconds
+                    : new Date(retryAfter);        // Parse RFC 7231 date format
+
+                // Use `RetryableError` to customize the retry
+                throw new RetryableError( // [!code highlight]
+                    `Rate limited by ${url}`, // [!code highlight]
+                    { retryAfter: retryAfterValue } // [!code highlight]
+                ) // [!code highlight]
+            }
         }
 
         // Other client errors are fatal (400, 401, 403, 404, etc.)

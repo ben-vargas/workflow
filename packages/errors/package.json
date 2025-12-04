@@ -1,7 +1,7 @@
 {
   "name": "@workflow/errors",
   "description": "A package for standardizing errors in Workflow DevKit",
-  "version": "4.0.1-beta.3",
+  "version": "4.0.1-beta.7",
   "type": "module",
   "main": "dist/index.js",
   "files": [
@@ -29,11 +29,13 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/ms": "^2.1.0",
+    "@types/ms": "2.1.0",
     "@types/node": "catalog:",
-    "@workflow/tsconfig": "workspace:*"
+    "@workflow/tsconfig": "workspace:*",
+    "@workflow/world": "workspace:*"
   },
   "dependencies": {
+    "@workflow/utils": "workspace:*",
     "ms": "2.1.3"
   }
 }

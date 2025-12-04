@@ -19,14 +19,27 @@ export const isStreamId = (value: unknown): boolean => {
   return typeof value === 'string' && value.startsWith(STREAM_ID_PREFIX);
 };
 
-const streamToStreamId = (value: any) => {
+const streamToStreamId = (value: any): string => {
   if ('name' in value) {
-    if (!value.name.startsWith(STREAM_ID_PREFIX)) {
-      return `${STREAM_ID_PREFIX}${value.name}`;
+    const name = String(value.name);
+    if (!name.startsWith(STREAM_ID_PREFIX)) {
+      return `${STREAM_ID_PREFIX}${name}`;
     }
-    return value.name;
+    return name;
   }
   return `${STREAM_ID_PREFIX}null`;
+};
+
+const serializedStepFunctionToString = (value: unknown): string => {
+  if (!value) return 'null';
+  if (typeof value !== 'object') return 'null';
+  if ('stepId' in value) {
+    const stepId = value.stepId;
+    // TODO: Add closure vars to the string representation.
+    // value.closureVars
+    return `<step:${stepId}>`;
+  }
+  return '<function>';
 };
 
 /**
@@ -40,10 +53,11 @@ const streamPrintRevivers: Record<string, (value: any) => any> = {
   ReadableStream: streamToStreamId,
   WritableStream: streamToStreamId,
   TransformStream: streamToStreamId,
+  StepFunction: serializedStepFunctionToString,
 };
 
 const hydrateStepIO = <
-  T extends { stepId?: string; input?: any; output?: any },
+  T extends { stepId?: string; input?: any; output?: any; runId?: string },
 >(
   step: T
 ): T => {
@@ -51,7 +65,13 @@ const hydrateStepIO = <
     ...step,
     input:
       step.input && Array.isArray(step.input) && step.input.length
-        ? hydrateStepArguments(step.input, [], globalThis, streamPrintRevivers)
+        ? hydrateStepArguments(
+            step.input,
+            [],
+            step.runId as string,
+            globalThis,
+            streamPrintRevivers
+          )
         : step.input,
     output: step.output
       ? hydrateStepReturnValue(step.output, globalThis, streamPrintRevivers)
@@ -78,6 +98,7 @@ const hydrateWorkflowIO = <
       ? hydrateWorkflowReturnValue(
           workflow.output,
           [],
+          workflow.runId as string,
           globalThis,
           streamPrintRevivers
         )
@@ -85,14 +106,32 @@ const hydrateWorkflowIO = <
   };
 };
 
-const hydrateEventData = <T extends { eventId?: string; eventData?: any }>(
+const hydrateEventData = <
+  T extends { eventId?: string; eventData?: any; runId?: string },
+>(
   event: T
 ): T => {
+  if (!event.eventData) {
+    return event;
+  }
+  const eventData = { ...event.eventData };
+  // Events can have various eventData with non-devalued keys.
+  // So far, only eventData.result is devalued (though this may change),
+  // so we need to hydrate it specifically.
+  try {
+    if ('result' in eventData && typeof eventData.result === 'object') {
+      eventData.result = hydrateStepReturnValue(
+        eventData.result,
+        globalThis,
+        streamPrintRevivers
+      );
+    }
+  } catch (error) {
+    console.error('Error hydrating event data', error);
+  }
   return {
     ...event,
-    eventData: event.eventData
-      ? hydrateStepArguments(event.eventData, [], globalThis)
-      : event.eventData,
+    eventData,
   };
 };
 
@@ -101,9 +140,16 @@ const hydrateHookMetadata = <T extends { hookId?: string; metadata?: any }>(
 ): T => {
   return {
     ...hook,
-    metadata: hook.metadata
-      ? hydrateStepArguments(hook.metadata, [], globalThis)
-      : hook.metadata,
+    metadata:
+      hook.metadata && 'runId' in hook
+        ? hydrateStepArguments(
+            hook.metadata,
+            [],
+            hook.runId as string,
+            globalThis,
+            streamPrintRevivers
+          )
+        : hook.metadata,
   };
 };
 

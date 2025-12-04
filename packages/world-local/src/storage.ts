@@ -1,10 +1,14 @@
 import path from 'node:path';
 import { WorkflowRunNotFoundError } from '@workflow/errors';
 import {
+  type CreateHookRequest,
   type Event,
   EventSchema,
+  type GetHookParams,
   type Hook,
   HookSchema,
+  type ListHooksParams,
+  type PaginatedResponse,
   type Step,
   StepSchema,
   type Storage,
@@ -94,6 +98,142 @@ const getObjectCreatedAt =
     return ulidToDate(ulid);
   };
 
+/**
+ * Creates a hooks storage implementation using the filesystem.
+ * Implements the Storage['hooks'] interface with hook CRUD operations.
+ */
+function createHooksStorage(basedir: string): Storage['hooks'] {
+  // Helper function to find a hook by token (shared between create and getByToken)
+  async function findHookByToken(token: string): Promise<Hook | null> {
+    const hooksDir = path.join(basedir, 'hooks');
+    const files = await listJSONFiles(hooksDir);
+
+    for (const file of files) {
+      const hookPath = path.join(hooksDir, `${file}.json`);
+      const hook = await readJSON(hookPath, HookSchema);
+      if (hook && hook.token === token) {
+        return hook;
+      }
+    }
+
+    return null;
+  }
+
+  async function create(runId: string, data: CreateHookRequest): Promise<Hook> {
+    // Check if a hook with the same token already exists
+    // Token uniqueness is enforced globally per local environment
+    const existingHook = await findHookByToken(data.token);
+    if (existingHook) {
+      throw new Error(
+        `Hook with token ${data.token} already exists for this project`
+      );
+    }
+
+    const now = new Date();
+
+    const result = {
+      runId,
+      hookId: data.hookId,
+      token: data.token,
+      metadata: data.metadata,
+      ownerId: 'local-owner',
+      projectId: 'local-project',
+      environment: 'local',
+      createdAt: now,
+    } as Hook;
+
+    const hookPath = path.join(basedir, 'hooks', `${data.hookId}.json`);
+    await writeJSON(hookPath, result);
+    return result;
+  }
+
+  async function get(hookId: string, params?: GetHookParams): Promise<Hook> {
+    const hookPath = path.join(basedir, 'hooks', `${hookId}.json`);
+    const hook = await readJSON(hookPath, HookSchema);
+    if (!hook) {
+      throw new Error(`Hook ${hookId} not found`);
+    }
+    const resolveData = params?.resolveData || DEFAULT_RESOLVE_DATA_OPTION;
+    return filterHookData(hook, resolveData);
+  }
+
+  async function getByToken(token: string): Promise<Hook> {
+    const hook = await findHookByToken(token);
+    if (!hook) {
+      throw new Error(`Hook with token ${token} not found`);
+    }
+    return hook;
+  }
+
+  async function list(
+    params: ListHooksParams
+  ): Promise<PaginatedResponse<Hook>> {
+    const hooksDir = path.join(basedir, 'hooks');
+    const resolveData = params.resolveData || DEFAULT_RESOLVE_DATA_OPTION;
+
+    const result = await paginatedFileSystemQuery({
+      directory: hooksDir,
+      schema: HookSchema,
+      sortOrder: params.pagination?.sortOrder,
+      limit: params.pagination?.limit,
+      cursor: params.pagination?.cursor,
+      filePrefix: undefined, // Hooks don't have ULIDs, so we can't optimize by filename
+      filter: (hook) => {
+        // Filter by runId if provided
+        if (params.runId && hook.runId !== params.runId) {
+          return false;
+        }
+        return true;
+      },
+      getCreatedAt: () => {
+        // Hook files don't have ULID timestamps in filename
+        // We need to read the file to get createdAt, but that's inefficient
+        // So we return the hook's createdAt directly (item.createdAt will be used for sorting)
+        // Return a dummy date to pass the null check, actual sorting uses item.createdAt
+        return new Date(0);
+      },
+      getId: (hook) => hook.hookId,
+    });
+
+    // Transform the data after pagination
+    return {
+      ...result,
+      data: result.data.map((hook) => filterHookData(hook, resolveData)),
+    };
+  }
+
+  async function dispose(hookId: string): Promise<Hook> {
+    const hookPath = path.join(basedir, 'hooks', `${hookId}.json`);
+    const hook = await readJSON(hookPath, HookSchema);
+    if (!hook) {
+      throw new Error(`Hook ${hookId} not found`);
+    }
+    await deleteJSON(hookPath);
+    return hook;
+  }
+
+  return { create, get, getByToken, list, dispose };
+}
+
+/**
+ * Helper function to delete all hooks associated with a workflow run
+ */
+async function deleteAllHooksForRun(
+  basedir: string,
+  runId: string
+): Promise<void> {
+  const hooksDir = path.join(basedir, 'hooks');
+  const files = await listJSONFiles(hooksDir);
+
+  for (const file of files) {
+    const hookPath = path.join(hooksDir, `${file}.json`);
+    const hook = await readJSON(hookPath, HookSchema);
+    if (hook && hook.runId === runId) {
+      await deleteJSON(hookPath);
+    }
+  }
+}
+
 export function createStorage(basedir: string): Storage {
   return {
     runs: {
@@ -112,7 +252,6 @@ export function createStorage(basedir: string): Storage {
           input: (data.input as any[]) || [],
           output: undefined,
           error: undefined,
-          errorCode: undefined,
           startedAt: undefined,
           completedAt: undefined,
           createdAt: now,
@@ -134,6 +273,15 @@ export function createStorage(basedir: string): Storage {
         return filterRunData(run, resolveData);
       },
 
+      /**
+       * Updates a workflow run.
+       *
+       * Note: This operation is not atomic. Concurrent updates from multiple
+       * processes may result in lost updates (last writer wins). This is an
+       * inherent limitation of filesystem-based storage without locking.
+       * For the local world, this is acceptable as it's typically
+       * used in single-process scenarios.
+       */
       async update(id, data) {
         const runPath = path.join(basedir, 'runs', `${id}.json`);
         const run = await readJSON(runPath, WorkflowRunSchema);
@@ -142,25 +290,33 @@ export function createStorage(basedir: string): Storage {
         }
 
         const now = new Date();
-        const updatedRun: WorkflowRun = {
+        const updatedRun = {
           ...run,
           ...data,
           updatedAt: now,
-        };
+        } as WorkflowRun;
 
         // Only set startedAt the first time the run transitions to 'running'
         if (data.status === 'running' && !updatedRun.startedAt) {
           updatedRun.startedAt = now;
         }
-        if (
+
+        const isBecomingTerminal =
           data.status === 'completed' ||
           data.status === 'failed' ||
-          data.status === 'cancelled'
-        ) {
+          data.status === 'cancelled';
+
+        if (isBecomingTerminal) {
           updatedRun.completedAt = now;
         }
 
         await writeJSON(runPath, updatedRun, { overwrite: true });
+
+        // If transitioning to a terminal status, clean up all hooks for this run
+        if (isBecomingTerminal) {
+          await deleteAllHooksForRun(basedir, id);
+        }
+
         return updatedRun;
       },
 
@@ -204,6 +360,7 @@ export function createStorage(basedir: string): Storage {
       },
 
       async cancel(id, params) {
+        // This will call update which triggers hook cleanup automatically
         const run = await this.update(id, { status: 'cancelled' });
         const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
         return filterRunData(run, resolveData);
@@ -234,7 +391,6 @@ export function createStorage(basedir: string): Storage {
           input: data.input as any[],
           output: undefined,
           error: undefined,
-          errorCode: undefined,
           attempt: 0,
           startedAt: undefined,
           completedAt: undefined,
@@ -274,6 +430,13 @@ export function createStorage(basedir: string): Storage {
         return filterStepData(step, resolveData);
       },
 
+      /**
+       * Updates a step.
+       *
+       * Note: This operation is not atomic. Concurrent updates from multiple
+       * processes may result in lost updates (last writer wins). This is an
+       * inherent limitation of filesystem-based storage without locking.
+       */
       async update(runId, stepId, data) {
         const compositeKey = `${runId}-${stepId}`;
         const stepPath = path.join(basedir, 'steps', `${compositeKey}.json`);
@@ -415,97 +578,6 @@ export function createStorage(basedir: string): Storage {
     },
 
     // Hooks
-    hooks: {
-      async create(runId, data) {
-        const now = new Date();
-
-        const result = {
-          runId,
-          hookId: data.hookId,
-          token: data.token,
-          metadata: data.metadata,
-          ownerId: 'embedded-owner',
-          projectId: 'embedded-project',
-          environment: 'embedded',
-          createdAt: now,
-        } as Hook;
-
-        const hookPath = path.join(basedir, 'hooks', `${data.hookId}.json`);
-        await writeJSON(hookPath, result);
-        return result;
-      },
-
-      async get(hookId, params) {
-        const hookPath = path.join(basedir, 'hooks', `${hookId}.json`);
-        // Try webhook schema first (which includes response), fall back to HookSchema
-        const hook = await readJSON(hookPath, HookSchema);
-        if (!hook) {
-          throw new Error(`Hook ${hookId} not found`);
-        }
-        const resolveData = params?.resolveData || DEFAULT_RESOLVE_DATA_OPTION;
-        return filterHookData(hook, resolveData);
-      },
-
-      async getByToken(token) {
-        // Need to search through all hooks to find one with matching token
-        const hooksDir = path.join(basedir, 'hooks');
-        const files = await listJSONFiles(hooksDir);
-
-        for (const file of files) {
-          const hookPath = path.join(hooksDir, `${file}.json`);
-          const hook = await readJSON(hookPath, HookSchema);
-          if (hook && hook.token === token) {
-            return hook;
-          }
-        }
-
-        throw new Error(`Hook with token ${token} not found`);
-      },
-
-      async list(params) {
-        const hooksDir = path.join(basedir, 'hooks');
-        const resolveData = params.resolveData || DEFAULT_RESOLVE_DATA_OPTION;
-
-        const result = await paginatedFileSystemQuery({
-          directory: hooksDir,
-          schema: HookSchema,
-          sortOrder: params.pagination?.sortOrder,
-          limit: params.pagination?.limit,
-          cursor: params.pagination?.cursor,
-          filePrefix: undefined, // Hooks don't have ULIDs, so we can't optimize by filename
-          filter: (hook) => {
-            // Filter by runId if provided
-            if (params.runId && hook.runId !== params.runId) {
-              return false;
-            }
-            return true;
-          },
-          getCreatedAt: () => {
-            // Hook files don't have ULID timestamps in filename
-            // We need to read the file to get createdAt, but that's inefficient
-            // So we return the hook's createdAt directly (item.createdAt will be used for sorting)
-            // Return a dummy date to pass the null check, actual sorting uses item.createdAt
-            return new Date(0);
-          },
-          getId: (hook) => hook.hookId,
-        });
-
-        // Transform the data after pagination
-        return {
-          ...result,
-          data: result.data.map((hook) => filterHookData(hook, resolveData)),
-        };
-      },
-
-      async dispose(hookId) {
-        const hookPath = path.join(basedir, 'hooks', `${hookId}.json`);
-        const hook = await readJSON(hookPath, HookSchema);
-        if (!hook) {
-          throw new Error(`Hook ${hookId} not found`);
-        }
-        await deleteJSON(hookPath);
-        return hook;
-      },
-    },
+    hooks: createHooksStorage(basedir),
   };
 }

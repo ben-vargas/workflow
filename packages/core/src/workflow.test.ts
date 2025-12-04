@@ -694,6 +694,84 @@ describe('runWorkflow', () => {
       expect(error.message).toEqual('test');
     });
 
+    it('should include workflow name in stack trace instead of evalmachine', async () => {
+      let error: Error | undefined;
+      try {
+        const ops: Promise<any>[] = [];
+        const workflowRun: WorkflowRun = {
+          runId: 'test-run-123',
+          workflowName: 'testWorkflow',
+          status: 'running',
+          input: dehydrateWorkflowArguments([], ops),
+          createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+          startedAt: new Date('2024-01-01T00:00:00.000Z'),
+          deploymentId: 'test-deployment',
+        };
+
+        const events: Event[] = [];
+
+        await runWorkflow(
+          `function testWorkflow() { throw new Error("test error"); }${getWorkflowTransformCode('testWorkflow')}`,
+          workflowRun,
+          events
+        );
+      } catch (err) {
+        error = err as Error;
+      }
+      assert(error);
+      expect(error.stack).toBeDefined();
+      // Stack trace should include the workflow name in the filename
+      expect(error.stack).toContain('testWorkflow');
+      // Stack trace should NOT contain 'evalmachine' which was the old behavior
+      expect(error.stack).not.toContain('evalmachine');
+    });
+
+    it('should include workflow name in nested function stack traces', async () => {
+      let error: Error | undefined;
+      try {
+        const ops: Promise<any>[] = [];
+        const workflowRun: WorkflowRun = {
+          runId: 'test-run-nested',
+          workflowName: 'nestedWorkflow',
+          status: 'running',
+          input: dehydrateWorkflowArguments([], ops),
+          createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+          startedAt: new Date('2024-01-01T00:00:00.000Z'),
+          deploymentId: 'test-deployment',
+        };
+
+        const events: Event[] = [];
+
+        // Test with nested function calls to verify stack trace includes all frames
+        const workflowCode = `
+          function helperFunction() {
+            throw new Error("nested error");
+          }
+          function anotherHelper() {
+            helperFunction();
+          }
+          function nestedWorkflow() {
+            anotherHelper();
+          }
+        ${getWorkflowTransformCode('nestedWorkflow')}`;
+
+        await runWorkflow(workflowCode, workflowRun, events);
+      } catch (err) {
+        error = err as Error;
+      }
+      assert(error);
+      expect(error.stack).toBeDefined();
+      // Stack trace should include the workflow name in all nested frames
+      expect(error.stack).toContain('nestedWorkflow');
+      // Should show multiple frames with the workflow filename
+      expect(error.stack).toContain('helperFunction');
+      expect(error.stack).toContain('anotherHelper');
+      // Stack trace should NOT contain 'evalmachine' in any frame
+      expect(error.stack).not.toContain('evalmachine');
+    });
+
     it('should throw `WorkflowSuspension` when a step does not have an event result entry', async () => {
       let error: Error | undefined;
       try {
@@ -2224,6 +2302,98 @@ describe('runWorkflow', () => {
       expect(hydrateWorkflowReturnValue(result as any, ops)).toEqual(
         'sleep with date completed'
       );
+    });
+  });
+
+  describe('closure variables', () => {
+    it('should serialize and deserialize closure variables for nested step functions', async () => {
+      let error: Error | undefined;
+      try {
+        const ops: Promise<any>[] = [];
+        const workflowRun: WorkflowRun = {
+          runId: 'test-run-123',
+          workflowName: 'workflow',
+          status: 'running',
+          input: dehydrateWorkflowArguments([], ops),
+          createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+          startedAt: new Date('2024-01-01T00:00:00.000Z'),
+          deploymentId: 'test-deployment',
+        };
+
+        const events: Event[] = [];
+
+        await runWorkflow(
+          `const useStep = globalThis[Symbol.for("WORKFLOW_USE_STEP")];
+          async function workflow() {
+            const multiplier = 3;
+            const prefix = 'Result: ';
+            const calculate = useStep('step//input.js//_anonymousStep0', () => ({ multiplier, prefix }));
+            const result = await calculate(7);
+            return result;
+          }${getWorkflowTransformCode('workflow')}`,
+          workflowRun,
+          events
+        );
+      } catch (err) {
+        error = err as Error;
+      }
+
+      // Should suspend to create the step
+      assert(error);
+      expect(error.name).toEqual('WorkflowSuspension');
+      expect((error as WorkflowSuspension).steps).toHaveLength(1);
+
+      const step = (error as WorkflowSuspension).steps[0];
+      expect(step).toMatchObject({
+        type: 'step',
+        stepName: 'step//input.js//_anonymousStep0',
+        args: [7],
+        closureVars: { multiplier: 3, prefix: 'Result: ' },
+      });
+    });
+
+    it('should handle step functions without closure variables', async () => {
+      let error: Error | undefined;
+      try {
+        const ops: Promise<any>[] = [];
+        const workflowRun: WorkflowRun = {
+          runId: 'test-run-123',
+          workflowName: 'workflow',
+          status: 'running',
+          input: dehydrateWorkflowArguments([], ops),
+          createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+          startedAt: new Date('2024-01-01T00:00:00.000Z'),
+          deploymentId: 'test-deployment',
+        };
+
+        const events: Event[] = [];
+
+        await runWorkflow(
+          `const add = globalThis[Symbol.for("WORKFLOW_USE_STEP")]("add");
+          async function workflow() {
+            const result = await add(5, 10);
+            return result;
+          }${getWorkflowTransformCode('workflow')}`,
+          workflowRun,
+          events
+        );
+      } catch (err) {
+        error = err as Error;
+      }
+
+      // Should suspend to create the step
+      assert(error);
+      expect(error.name).toEqual('WorkflowSuspension');
+      expect((error as WorkflowSuspension).steps).toHaveLength(1);
+
+      const step = (error as WorkflowSuspension).steps[0];
+      expect(step).toMatchObject({
+        type: 'step',
+        stepName: 'add',
+        args: [5, 10],
+      });
     });
   });
 });

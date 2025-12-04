@@ -2,10 +2,6 @@
 title: RetryableError
 ---
 
-import { generateDefinition } from "@/lib/tsdoc"
-
-# `RetryableError`
-
 When a `RetryableError` is thrown in a step, it indicates that the workflow should retry a step. Additionally, it contains a parameter `retryAfter` indicating when the step should be retried after.
 
 You should use this when you want to retry a step or retry after a certain duration.
@@ -33,26 +29,22 @@ The difference between `Error` and `RetryableError` may not be entirely obvious,
 ### Parameters
 
 <TSDoc
-definition={generateDefinition({
-  code: `
+definition={`
 import { type RetryableErrorOptions } from "workflow";
 interface RetryableError {
     options?: RetryableErrorOptions;
     message: string;
 }
 
-export default RetryableError;`
-})}
+export default RetryableError;`}
 />
 
 #### RetryableErrorOptions
 
 <TSDoc
-definition={generateDefinition({
-  code: `
+definition={`
 import { type RetryableErrorOptions } from "workflow";
-export default RetryableErrorOptions;`
-})}
+export default RetryableErrorOptions;`}
 />
 
 ## Examples
@@ -72,7 +64,43 @@ async function retryableWorkflow() {
 async function retryStep() {
     "use step"
     throw new RetryableError("Retryable!", {
-        retryAfter: "5m" // [!code highlight]
+        retryAfter: "5m" // - supports "5m", "30s", "1h", etc. // [!code highlight]
+    })
+}
+```
+
+You can also specify the retry delay in milliseconds:
+
+```typescript lineNumbers
+import { RetryableError } from "workflow"
+
+async function retryableWorkflow() {
+    "use workflow"
+    await retryStep();
+}
+
+async function retryStep() {
+    "use step"
+    throw new RetryableError("Retryable!", {
+        retryAfter: 5000 // - 5000 milliseconds = 5 seconds // [!code highlight]
+    })
+}
+```
+
+Or retry at a specific date and time:
+
+```typescript lineNumbers
+import { RetryableError } from "workflow"
+
+async function retryableWorkflow() {
+    "use workflow"
+    await retryStep();
+}
+
+async function retryStep() {
+    "use step"
+    throw new RetryableError("Retryable!", {
+        retryAfter: new Date(Date.now() + 60000) // - retry after 1 minute // [!code highlight]
     })
 }
 ```

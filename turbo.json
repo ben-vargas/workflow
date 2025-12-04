@@ -4,19 +4,25 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "build", ".svelte-kit", ".vercel/output"]
+      "outputs": [
+        "dist/**",
+        "build",
+        ".svelte-kit",
+        ".vercel/output",
+        ".output/**"
+      ]
     },
     "dev": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "build", ".svelte-kit", ".vercel/output"]
+      "cache": false
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "build", ".svelte-kit", ".vercel/output"]
+      "cache": false
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "build", ".svelte-kit", ".vercel/output"]
+      "cache": false
     },
     "clean": {
       "cache": false

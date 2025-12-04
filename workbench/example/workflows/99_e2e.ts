@@ -10,6 +10,8 @@ import {
   RetryableError,
   sleep,
 } from 'workflow';
+import { getRun, start } from 'workflow/api';
+import { callThrower } from './helpers.js';
 
 //////////////////////////////////////////////////////////
 
@@ -24,6 +26,27 @@ export async function addTenWorkflow(input: number) {
   const b = await add(a, 3);
   const c = await add(b, 5);
   return c;
+}
+
+//////////////////////////////////////////////////////////
+
+// Helper functions to test nested stack traces
+function deepFunction() {
+  throw new Error('Error from deeply nested function');
+}
+
+function middleFunction() {
+  deepFunction();
+}
+
+function topLevelHelper() {
+  middleFunction();
+}
+
+export async function nestedErrorWorkflow() {
+  'use workflow';
+  topLevelHelper();
+  return 'never reached';
 }
 
 //////////////////////////////////////////////////////////
@@ -197,14 +220,6 @@ export async function sleepingWorkflow() {
   return { startTime, endTime };
 }
 
-export async function sleepingDateWorkflow(endDate: Date) {
-  'use workflow';
-  const startTime = Date.now();
-  await sleep(endDate);
-  const endTime = Date.now();
-  return { startTime, endTime };
-}
-
 //////////////////////////////////////////////////////////
 
 async function nullByteStep() {
@@ -284,6 +299,54 @@ export async function outputStreamWorkflow() {
   await sleep('1s');
   await stepCloseOutputStream(writable);
   await stepCloseOutputStream(namedWritable);
+  return 'done';
+}
+
+//////////////////////////////////////////////////////////
+
+async function stepWithOutputStreamInsideStep(text: string) {
+  'use step';
+  // Call getWritable directly inside the step function
+  const writable = getWritable();
+  const writer = writable.getWriter();
+  await writer.write(new TextEncoder().encode(text));
+  writer.releaseLock();
+}
+
+async function stepWithNamedOutputStreamInsideStep(
+  namespace: string,
+  obj: any
+) {
+  'use step';
+  // Call getWritable with namespace directly inside the step function
+  const writable = getWritable({ namespace });
+  const writer = writable.getWriter();
+  await writer.write(obj);
+  writer.releaseLock();
+}
+
+async function stepCloseOutputStreamInsideStep(namespace?: string) {
+  'use step';
+  // Call getWritable directly inside the step function and close it
+  const writable = getWritable({ namespace });
+  await writable.close();
+}
+
+export async function outputStreamInsideStepWorkflow() {
+  'use workflow';
+  await sleep('1s');
+  await stepWithOutputStreamInsideStep('Hello from step!');
+  await sleep('1s');
+  await stepWithNamedOutputStreamInsideStep('step-ns', {
+    message: 'Hello from named stream in step!',
+  });
+  await sleep('1s');
+  await stepWithOutputStreamInsideStep('Second message');
+  await sleep('1s');
+  await stepWithNamedOutputStreamInsideStep('step-ns', { counter: 42 });
+  await sleep('1s');
+  await stepCloseOutputStreamInsideStep();
+  await stepCloseOutputStreamInsideStep('step-ns');
   return 'done';
 }
 
@@ -379,6 +442,15 @@ async function stepThatThrowsRetryableError() {
   };
 }
 
+export async function crossFileErrorWorkflow() {
+  'use workflow';
+  // This will throw an error from the imported helpers.ts file
+  callThrower();
+  return 'never reached';
+}
+
+//////////////////////////////////////////////////////////
+
 export async function retryableAndFatalErrorWorkflow() {
   'use workflow';
 
@@ -394,4 +466,146 @@ export async function retryableAndFatalErrorWorkflow() {
   }
 
   return { retryableResult, gotFatalError };
+}
+
+//////////////////////////////////////////////////////////
+
+export async function hookCleanupTestWorkflow(
+  token: string,
+  customData: string
+) {
+  'use workflow';
+
+  type Payload = { message: string; customData: string };
+
+  const hook = createHook<Payload>({
+    token,
+    metadata: { customData },
+  });
+
+  // Wait for exactly one payload
+  const payload = await hook;
+
+  return {
+    message: payload.message,
+    customData: payload.customData,
+    hookCleanupTestData: 'workflow_completed',
+  };
+}
+
+//////////////////////////////////////////////////////////
+
+export async function stepFunctionPassingWorkflow() {
+  'use workflow';
+  // Pass a step function reference to another step (without closure vars)
+  const result = await stepWithStepFunctionArg(doubleNumber);
+  return result;
+}
+
+async function stepWithStepFunctionArg(stepFn: (x: number) => Promise<number>) {
+  'use step';
+  // Call the passed step function reference
+  const result = await stepFn(10);
+  return result * 2;
+}
+
+async function doubleNumber(x: number) {
+  'use step';
+  return x * 2;
+}
+
+//////////////////////////////////////////////////////////
+
+export async function stepFunctionWithClosureWorkflow() {
+  'use workflow';
+  const multiplier = 3;
+  const prefix = 'Result: ';
+
+  // Create a step function that captures closure variables
+  const calculate = async (x: number) => {
+    'use step';
+    return `${prefix}${x * multiplier}`;
+  };
+
+  // Pass the step function (with closure vars) to another step
+  const result = await stepThatCallsStepFn(calculate, 7);
+  return result;
+}
+
+async function stepThatCallsStepFn(
+  stepFn: (x: number) => Promise<string>,
+  value: number
+) {
+  'use step';
+  // Call the passed step function - closure vars should be preserved
+  const result = await stepFn(value);
+  return `Wrapped: ${result}`;
+}
+
+//////////////////////////////////////////////////////////
+
+export async function closureVariableWorkflow(baseValue: number) {
+  'use workflow';
+  // biome-ignore lint/style/useConst: Intentionally using `let` instead of `const`
+  let multiplier = 3;
+  const prefix = 'Result: ';
+
+  // Nested step function that uses closure variables
+  const calculate = async () => {
+    'use step';
+    const result = baseValue * multiplier;
+    return `${prefix}${result}`;
+  };
+
+  const output = await calculate();
+  return output;
+}
+
+//////////////////////////////////////////////////////////
+
+// Child workflow that will be spawned from another workflow
+export async function childWorkflow(value: number) {
+  'use workflow';
+  // Do some processing
+  const doubled = await doubleValue(value);
+  return { childResult: doubled, originalValue: value };
+}
+
+async function doubleValue(value: number) {
+  'use step';
+  return value * 2;
+}
+
+// Step function that spawns another workflow using start()
+async function spawnChildWorkflow(value: number) {
+  'use step';
+  // start() can only be called inside a step function, not directly in workflow code
+  const childRun = await start(childWorkflow, [value]);
+  return childRun.runId;
+}
+
+// Step function that waits for a workflow run to complete and returns its result
+async function awaitWorkflowResult<T>(runId: string) {
+  'use step';
+  const run = getRun<T>(runId);
+  const result = await run.returnValue;
+  return result;
+}
+
+export async function spawnWorkflowFromStepWorkflow(inputValue: number) {
+  'use workflow';
+  // Spawn the child workflow from inside a step function
+  const childRunId = await spawnChildWorkflow(inputValue);
+
+  // Wait for the child workflow to complete (also in a step)
+  const childResult = await awaitWorkflowResult<{
+    childResult: number;
+    originalValue: number;
+  }>(childRunId);
+
+  return {
+    parentInput: inputValue,
+    childRunId,
+    childResult,
+  };
 }

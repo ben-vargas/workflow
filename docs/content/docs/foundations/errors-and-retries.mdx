@@ -2,15 +2,11 @@
 title: Errors & Retrying
 ---
 
-# Errors & Retrying
-
 By default, errors thrown inside steps are retried. Additionally, Workflow DevKit provides two new types of errors you can use to customize retries.
-
----
 
 ## Default Retrying
 
-By default, steps retry up to 3 times on arbitrary errors. You can customize the number of retries by adding a maxRetries property to the step function
+By default, steps retry up to 3 times on arbitrary errors. You can customize the number of retries by adding a `maxRetries` property to the step function.
 
 ```typescript lineNumbers
 async function callApi(endpoint: string) {
@@ -29,7 +25,7 @@ async function callApi(endpoint: string) {
 callApi.maxRetries = 5; // Set a custom number of retries
 ```
 
-Steps get enqueued immediately after the failure. Read on to see how this can be customized.
+Steps get enqueued immediately after a failure. Read on to see how this can be customized.
 
 <Callout type="info">
   When a retried step performs external side effects (payments, emails, API
@@ -65,7 +61,7 @@ async function callApi(endpoint: string) {
 
 ## Customize Retry Behavior
 
-When you need to customize the delay on the retry, use [`RetryableError`](/docs/api-reference/workflow/retryable-error)and set the retryAfter property.
+When you need to customize the delay on a retry, use [`RetryableError`](/docs/api-reference/workflow/retryable-error) and set the `retryAfter` property.
 
 ```typescript lineNumbers
 import { FatalError, RetryableError } from "workflow";
@@ -84,10 +80,8 @@ async function callApi(endpoint: string) {
   }
 
   if (response.status === 429) {
-    const retryAfter = response.headers.get("Retry-After");
-    // Delay the retry until after a timeout
-    throw new RetryableError("Too many requests. Retrying...", { // [!code highlight]
-      retryAfter: parseInt(retryAfter), // [!code highlight]
+    throw new RetryableError("Rate limited. Retrying...", { // [!code highlight]
+      retryAfter: "1m", // Duration string // [!code highlight]
     }); // [!code highlight]
   }
 
@@ -97,7 +91,7 @@ async function callApi(endpoint: string) {
 
 ## Advanced Example
 
-This final example combines everything we've learnt, along with [`getStepMetadata`](/docs/api-reference/workflow/get-step-metadata).
+This final example combines everything we've learned, along with [`getStepMetadata`](/docs/api-reference/workflow/get-step-metadata).
 
 ```typescript lineNumbers
 import { FatalError, RetryableError, getStepMetadata } from "workflow";
@@ -112,7 +106,7 @@ async function callApi(endpoint: string) {
   if (response.status >= 500) {
     // Exponential backoffs
     throw new RetryableError("Backing off...", {
-      retryAfter: metadata.attempt ** 2,  // [!code highlight]
+      retryAfter: (metadata.attempt ** 2) * 1000,  // [!code highlight]
     });
   }
 
@@ -121,10 +115,8 @@ async function callApi(endpoint: string) {
   }
 
   if (response.status === 429) {
-    const retryAfter = response.headers.get("Retry-After");
-    // Delay the retry until after a timeout
-    throw new RetryableError("Too many requests. Retrying...", {
-      retryAfter: parseInt(retryAfter),
+    throw new RetryableError("Rate limited. Retrying...", {
+      retryAfter: new Date(Date.now() + 60000),  // Date instance // [!code highlight]
     });
   }
 
@@ -133,7 +125,7 @@ async function callApi(endpoint: string) {
 callApi.maxRetries = 5;
 ```
 
-## Rolling back failed steps
+## Rolling Back Failed Steps
 
 When a workflow fails partway through, it can leave the system in an inconsistent state.
 A common pattern to address this is "rollbacks": for each successful step, record a corresponding rollback action that can undo it.

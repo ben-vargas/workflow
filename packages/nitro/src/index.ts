@@ -1,7 +1,7 @@
 import type { Nitro, NitroModule, RollupConfig } from 'nitro/types';
 import { join } from 'pathe';
 import { LocalBuilder, VercelBuilder } from './builders.js';
-import { workflowRollupPlugin } from './rollup.js';
+import { workflowTransformPlugin } from '@workflow/rollup';
 import type { ModuleOptions } from './types';
 
 export type { ModuleOptions };
@@ -14,12 +14,30 @@ export default {
 
     // Add transform plugin
     nitro.hooks.hook('rollup:before', (_nitro: Nitro, config: RollupConfig) => {
-      (config.plugins as Array<unknown>).push(workflowRollupPlugin());
+      (config.plugins as Array<unknown>).push(workflowTransformPlugin());
     });
 
-    // Temporary workaround for debug unenv mock
+    // NOTE: Temporary workaround for debug unenv mock
     if (!nitro.options.workflow?._vite) {
       nitro.options.alias['debug'] ??= 'debug';
+    }
+
+    // NOTE: Externalize .nitro/workflow to prevent dev reloads
+    if (nitro.options.dev) {
+      nitro.options.externals ||= {};
+      nitro.options.externals.external ||= [];
+      const outDir = join(nitro.options.buildDir, 'workflow');
+      nitro.options.externals.external.push((id) => id.startsWith(outDir));
+    }
+
+    // Add tsConfig plugin
+    if (nitro.options.workflow?.typescriptPlugin) {
+      nitro.options.typescript.tsConfig ||= {};
+      nitro.options.typescript.tsConfig.compilerOptions ||= {};
+      nitro.options.typescript.tsConfig.compilerOptions.plugins ||= [];
+      nitro.options.typescript.tsConfig.compilerOptions.plugins.push({
+        name: 'workflow',
+      });
     }
 
     // Generate functions for vercel build
@@ -31,9 +49,17 @@ export default {
 
     // Generate local bundles for dev and local prod
     if (!isVercelDeploy) {
+      const builder = new LocalBuilder(nitro);
       nitro.hooks.hook('build:before', async () => {
-        await new LocalBuilder(nitro).build();
+        await builder.build();
       });
+
+      // Allows for HMR
+      if (nitro.options.dev) {
+        nitro.hooks.hook('dev:reload', async () => {
+          await builder.build();
+        });
+      }
 
       addVirtualHandler(
         nitro,
@@ -73,7 +99,14 @@ function addVirtualHandler(nitro: Nitro, route: string, buildPath: string) {
     // Nitro v3+ (native web handlers)
     nitro.options.virtual[`#${buildPath}`] = /* js */ `
     import { POST } from "${join(nitro.options.buildDir, buildPath)}";
-    export default ({ req }) => POST(req);
+    export default async ({ req }) => {
+      try {
+        return await POST(req);
+      } catch (error) {
+        console.error('Handler error:', error);
+        return new Response('Internal Server Error', { status: 500 });
+      }
+    };
   `;
   }
 }

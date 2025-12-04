@@ -5,11 +5,15 @@
   "version": "0.0.0",
   "license": "Apache-2.0",
   "scripts": {
+    "generate:workflows": "node ../scripts/generate-workflows-registry.js",
+    "predev": "pnpm generate:workflows",
+    "prebuild": "pnpm generate:workflows",
     "dev": "nuxt dev",
     "build": "nuxt build",
     "start": "node .output/server/index.mjs"
   },
   "devDependencies": {
+    "@workflow/world-postgres": "workspace:*",
     "@types/node": "catalog:",
     "workflow": "workspace:*",
     "ai": "catalog:",
@@ -18,5 +22,8 @@
     "nuxt": "^4.1.3",
     "openai": "^6.6.0",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@node-rs/xxhash": "1.7.6"
   }
 }

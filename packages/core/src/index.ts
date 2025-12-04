@@ -24,7 +24,8 @@ export {
   type Webhook,
   type WebhookOptions,
 } from './create-hook.js';
-export { defineHook } from './define-hook.js';
+export { defineHook, type TypedHook } from './define-hook.js';
+export { sleep } from './sleep.js';
 export {
   getStepMetadata,
   type StepMetadata,
@@ -33,5 +34,7 @@ export {
   getWorkflowMetadata,
   type WorkflowMetadata,
 } from './step/get-workflow-metadata.js';
-export { sleep } from './sleep.js';
-export { getWritable } from './writable-stream.js';
+export {
+  getWritable,
+  type WorkflowWritableStreamOptions,
+} from './step/writable-stream.js';

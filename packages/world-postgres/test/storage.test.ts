@@ -31,7 +31,7 @@ describe('Storage (Postgres integration)', () => {
   let events: ReturnType<typeof createEventsStorage>;
 
   async function truncateTables() {
-    await sql`TRUNCATE TABLE workflow_events, workflow_steps, workflow_hooks, workflow_runs RESTART IDENTITY CASCADE`;
+    await sql`TRUNCATE TABLE workflow.workflow_events, workflow.workflow_steps, workflow.workflow_hooks, workflow.workflow_runs RESTART IDENTITY CASCADE`;
   }
 
   beforeAll(async () => {
@@ -85,7 +85,6 @@ describe('Storage (Postgres integration)', () => {
         expect(run.input).toEqual(['arg1', 'arg2']);
         expect(run.output).toBeUndefined();
         expect(run.error).toBeUndefined();
-        expect(run.errorCode).toBeUndefined();
         expect(run.startedAt).toBeUndefined();
         expect(run.completedAt).toBeUndefined();
         expect(run.createdAt).toBeInstanceOf(Date);
@@ -167,13 +166,17 @@ describe('Storage (Postgres integration)', () => {
 
         const updated = await runs.update(created.runId, {
           status: 'failed',
-          error: 'Something went wrong',
-          errorCode: 'ERR_001',
+          error: {
+            message: 'Something went wrong',
+            code: 'ERR_001',
+          },
         });
 
         expect(updated.status).toBe('failed');
-        expect(updated.error).toBe('Something went wrong');
-        expect(updated.errorCode).toBe('ERR_001');
+        expect(updated.error).toEqual({
+          message: 'Something went wrong',
+          code: 'ERR_001',
+        });
         expect(updated.completedAt).toBeInstanceOf(Date);
       });
 
@@ -326,19 +329,20 @@ describe('Storage (Postgres integration)', () => {
 
         const step = await steps.create(testRunId, stepData);
 
-        expect(step.runId).toBe(testRunId);
-        expect(step.stepId).toBe('step-123');
-        expect(step.stepName).toBe('test-step');
-        expect(step.status).toBe('pending');
-        expect(step.input).toEqual(['input1', 'input2']);
-        expect(step.output).toBeUndefined();
-        expect(step.error).toBeUndefined();
-        expect(step.errorCode).toBeUndefined();
-        expect(step.attempt).toBe(1); // steps are created with attempt 1
-        expect(step.startedAt).toBeUndefined();
-        expect(step.completedAt).toBeUndefined();
-        expect(step.createdAt).toBeInstanceOf(Date);
-        expect(step.updatedAt).toBeInstanceOf(Date);
+        expect(step).toEqual({
+          runId: testRunId,
+          stepId: 'step-123',
+          stepName: 'test-step',
+          status: 'pending',
+          input: ['input1', 'input2'],
+          output: undefined,
+          error: undefined,
+          attempt: 0, // steps are created with attempt 0
+          startedAt: undefined,
+          completedAt: undefined,
+          createdAt: expect.any(Date),
+          updatedAt: expect.any(Date),
+        });
       });
     });
 
@@ -416,13 +420,15 @@ describe('Storage (Postgres integration)', () => {
 
         const updated = await steps.update(testRunId, 'step-123', {
           status: 'failed',
-          error: 'Step failed',
-          errorCode: 'STEP_ERR',
+          error: {
+            message: 'Step failed',
+            code: 'STEP_ERR',
+          },
         });
 
         expect(updated.status).toBe('failed');
-        expect(updated.error).toBe('Step failed');
-        expect(updated.errorCode).toBe('STEP_ERR');
+        expect(updated.error?.message).toBe('Step failed');
+        expect(updated.error?.code).toBe('STEP_ERR');
         expect(updated.completedAt).toBeInstanceOf(Date);
       });
 
@@ -520,6 +526,20 @@ describe('Storage (Postgres integration)', () => {
         expect(event.runId).toBe(testRunId);
         expect(event.eventId).toMatch(/^wevt_/);
         expect(event.eventType).toBe('step_started');
+        expect(event.correlationId).toBe('corr_123');
+        expect(event.createdAt).toBeInstanceOf(Date);
+      });
+
+      it('should create a new event with null byte in payload', async () => {
+        const event = await events.create(testRunId, {
+          eventType: 'step_failed',
+          correlationId: 'corr_123',
+          eventData: { error: 'Error with null byte \u0000 in message' },
+        });
+
+        expect(event.runId).toBe(testRunId);
+        expect(event.eventId).toMatch(/^wevt_/);
+        expect(event.eventType).toBe('step_failed');
         expect(event.correlationId).toBe('corr_123');
         expect(event.createdAt).toBeInstanceOf(Date);
       });

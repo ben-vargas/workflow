@@ -8,6 +8,7 @@ import type {
   Step,
   WorkflowRun,
   WorkflowRunStatus,
+  World,
 } from '@workflow/world';
 
 export type EnvMap = Record<string, string | undefined>;
@@ -38,14 +39,45 @@ export type ServerActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: ServerActionError };
 
+/**
+ * Cache for World instances keyed by envMap
+ *
+ * IMPORTANT: This cache works under the assumption that if the UI is used to look at
+ * different worlds, the user should pass all relevant variables via EnvMap, instead of
+ * setting them directly on their Next.js instance. If environment variables are set
+ * directly on process.env, the cached World may operate with incorrect environment
+ * configuration.
+ */
+const worldCache = new Map<string, World>();
+
 function getWorldFromEnv(envMap: EnvMap) {
+  // Generate stable cache key from envMap
+  const sortedKeys = Object.keys(envMap).sort();
+  const sortedEntries = sortedKeys.map((key) => [key, envMap[key]]);
+  const cacheKey = JSON.stringify(Object.fromEntries(sortedEntries));
+
+  // Check if we have a cached World for this configuration
+  // Note: This returns the cached World without re-setting process.env.
+  // See comment above worldCache for important usage assumptions.
+  const cachedWorld = worldCache.get(cacheKey);
+  if (cachedWorld) {
+    return cachedWorld;
+  }
+
+  // No cached World found, create a new one
   for (const [key, value] of Object.entries(envMap)) {
     if (value === undefined || value === null || value === '') {
       continue;
     }
     process.env[key] = value;
   }
-  return createWorld();
+
+  const world = createWorld();
+
+  // Cache the newly created World
+  worldCache.set(cacheKey, world);
+
+  return world;
 }
 
 /**
@@ -102,7 +134,15 @@ function getUserFacingMessage(error: Error): string {
   return error.message || 'An unexpected error occurred';
 }
 
+const toJSONCompatible = <T>(data: T): T => {
+  if (data && typeof data === 'object') {
+    return JSON.parse(JSON.stringify(data)) as T;
+  }
+  return data;
+};
+
 const hydrate = <T>(data: T): T => {
+  data = toJSONCompatible(data);
   try {
     return hydrateResourceIO(data as any) as T;
   } catch (error) {
@@ -116,6 +156,7 @@ const hydrate = <T>(data: T): T => {
  * @returns ServerActionResult with success=true and the data
  */
 function createResponse<T>(data: T): ServerActionResult<T> {
+  data = toJSONCompatible(data);
   return {
     success: true,
     data,
@@ -238,7 +279,8 @@ export async function fetchStep(
   try {
     const world = getWorldFromEnv(worldEnv);
     const step = await world.steps.get(runId, stepId, { resolveData });
-    return createResponse(hydrate(step as Step));
+    const hydratedStep = hydrate(step as Step);
+    return createResponse(hydratedStep);
   } catch (error) {
     console.error('Failed to fetch step:', error);
     return {
@@ -311,7 +353,7 @@ export async function fetchEventsByCorrelationId(
       resolveData: withData ? 'all' : 'none',
     });
     return createResponse({
-      data: result.data as unknown as Event[],
+      data: result.data.map(hydrate),
       cursor: result.cursor ?? undefined,
       hasMore: result.hasMore,
     });

@@ -10,6 +10,4 @@ export class MyClass {
 }
 export * from './other';
 // This is ok
-export async function validStep() {
-    return globalThis[Symbol.for("WORKFLOW_USE_STEP")]("step//input.js//validStep")();
-}
+export var validStep = globalThis[Symbol.for("WORKFLOW_USE_STEP")]("step//input.js//validStep");

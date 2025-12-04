@@ -1,15 +1,12 @@
-import { runStep as __private_run_step } from "workflow/api";
-/**__internal_workflows{"workflows":{"input.js":{"workflowFunction":{"workflowId":"workflow//input.js//workflowFunction"}}},"steps":{"input.js":{"stepFunction":{"stepId":"step//input.js//stepFunction"}}}}*/;
+/**__internal_workflows{"workflows":{"input.js":{"workflowFunction":{"workflowId":"workflow//input.js//workflowFunction"}}},"steps":{"input.js":{"stepFunction":{"stepId":"step//input.js//stepFunction"},"stepFunctionWithoutExport":{"stepId":"step//input.js//stepFunctionWithoutExport"}}}}*/;
 export async function stepFunction(a, b) {
-    return __private_run_step("stepFunction", {
-        arguments: [
-            a,
-            b
-        ]
-    });
+    return a + b;
+}
+async function stepFunctionWithoutExport(a, b) {
+    return a - b;
 }
 export async function workflowFunction(a, b) {
-    throw new Error("You attempted to execute workflow workflowFunction function directly. To start a workflow, use start(workflowFunction) from workflow");
+    throw new Error("You attempted to execute workflow workflowFunction function directly. To start a workflow, use start(workflowFunction) from workflow/api");
 }
 workflowFunction.workflowId = "workflow//input.js//workflowFunction";
 export async function normalFunction(a, b) {
