@@ -14,7 +14,7 @@ import {
   CodeBlockTabsList,
   CodeBlockTabsTrigger,
 } from './code-block-tabs';
-import { Intro } from '../docs/getting-started/intro';
+import { GettingStartedIntro } from '../docs/getting-started/intro';
 import { Mermaid } from './mermaid';
 import { Video } from './video';
 
@@ -46,5 +46,5 @@ export const getMDXComponents = (
 
   Video,
 
-  Intro,
+  GettingStartedIntro,
 });
