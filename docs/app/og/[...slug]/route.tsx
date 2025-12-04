@@ -85,6 +85,5 @@ export const GET = async (
 
 export const generateStaticParams = () =>
   source.getPages().map((page) => ({
-    lang: page.locale,
     slug: getPageImage(page).segments,
   }));
