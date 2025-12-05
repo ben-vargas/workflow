@@ -248,7 +248,7 @@ export function RunDetailView({
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="flex flex-col h-[calc(100vh-88px)]">
+      <div className="flex flex-col h-[calc(100vh-97px)]">
         <div className="flex-none space-y-4">
           <Breadcrumb>
             <BreadcrumbList>
@@ -405,7 +405,7 @@ export function RunDetailView({
                       </p>
                     </TooltipContent>
                   </Tooltip>
-                  <div className="text-sm">
+                  <div className="text-xs">
                     <RelativeTime date={run.expiredAt} />
                   </div>
                 </div>
