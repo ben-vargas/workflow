@@ -1,4 +1,5 @@
 import './global.css';
+import { Footer } from '@/components/geistdocs/footer';
 import { Navbar } from '@/components/geistdocs/navbar';
 import { GeistdocsProvider } from '@/components/geistdocs/provider';
 import { mono, sans } from '@/lib/geistdocs/fonts';
@@ -54,6 +55,7 @@ const Layout = ({ children }: LayoutProps<'/'>) => (
           <Logo />
         </Navbar>
         {children}
+        <Footer />
       </GeistdocsProvider>
     </body>
   </html>
