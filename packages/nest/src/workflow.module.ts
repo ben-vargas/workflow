@@ -4,7 +4,7 @@ import {
   type OnModuleInit,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { LocalBuilder, VercelBuilder } from './builder.js';
+import { LocalBuilder } from './builder.js';
 import { WorkflowController } from './workflow.controller.js';
 import { createBuildQueue } from '@workflow/builders';
 
@@ -22,19 +22,11 @@ export class WorkflowModule implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  // static async build() {
-  //   // Build locally
-  //   if (!process.env.VERCEL_DEPLOYMENT_ID) {
-  //     await enqueue(() => localBuilder.build());
-  //     return;
-  //   }
-
-  //   // Build for Vercel
-  //   await enqueue(() => new VercelBuilder().build());
-  // }
-
   async onModuleInit() {
+    // if (!process.env.VERCEL_DEPLOYMENT_ID) {
     await enqueue(() => localBuilder.build());
+    return;
+    // }
   }
 
   async onModuleDestroy() {
