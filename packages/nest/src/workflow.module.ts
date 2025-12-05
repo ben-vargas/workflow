@@ -22,16 +22,16 @@ export class WorkflowModule implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  static async build() {
-    // Build locally
-    if (!process.env.VERCEL_DEPLOYMENT_ID) {
-      await enqueue(() => localBuilder.build());
-      return;
-    }
+  // static async build() {
+  //   // Build locally
+  //   if (!process.env.VERCEL_DEPLOYMENT_ID) {
+  //     await enqueue(() => localBuilder.build());
+  //     return;
+  //   }
 
-    // Build for Vercel
-    await enqueue(() => new VercelBuilder().build());
-  }
+  //   // Build for Vercel
+  //   await enqueue(() => new VercelBuilder().build());
+  // }
 
   async onModuleInit() {
     await enqueue(() => localBuilder.build());
