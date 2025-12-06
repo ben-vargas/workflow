@@ -1,5 +1,15 @@
 # @vercel/workflow-nitro
 
+## 4.0.1-beta.28
+
+### Patch Changes
+
+- 205b395: Move Vite HMR to @workflow/vite package
+- Updated dependencies [19c271c]
+- Updated dependencies [205b395]
+  - @workflow/builders@4.0.1-beta.24
+  - @workflow/vite@4.0.0-beta.2
+
 ## 4.0.1-beta.27
 
 ### Patch Changes

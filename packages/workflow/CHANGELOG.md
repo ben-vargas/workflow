@@ -1,5 +1,18 @@
 # workflow
 
+## 4.0.1-beta.29
+
+### Patch Changes
+
+- Updated dependencies [19c271c]
+- Updated dependencies [205b395]
+  - @workflow/sveltekit@4.0.0-beta.22
+  - @workflow/astro@4.0.0-beta.7
+  - @workflow/nitro@4.0.1-beta.28
+  - @workflow/cli@4.0.1-beta.29
+  - @workflow/next@4.0.1-beta.28
+  - @workflow/nuxt@4.0.1-beta.17
+
 ## 4.0.1-beta.28
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @workflow/builders
 
+## 4.0.1-beta.24
+
+### Patch Changes
+
+- 19c271c: Refactor request converter code in SvelteKit and Astro builder to @workflow/builders
+
 ## 4.0.1-beta.23
 
 ### Patch Changes
