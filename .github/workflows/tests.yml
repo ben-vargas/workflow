@@ -658,7 +658,8 @@ jobs:
     name: Publish E2E Results
     runs-on: ubuntu-latest
     needs: [summary]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Use always() because summary uses always() - without it this job gets skipped when any E2E test fails
+    if: always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 5
 
     permissions:
