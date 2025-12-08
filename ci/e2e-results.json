@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2025-12-08T22:52:00.701Z",
+  "lastUpdated": "2025-12-08T23:50:40.367Z",
   "commit": "8ff4b3a508e11c64b117fc25be42b388270bfb26",
   "branch": "main",
   "type": "e2e",
@@ -161,10 +161,10 @@
       "progress": 97
     },
     "vercel": {
-      "status": "partial",
+      "status": "passing",
       "total": 286,
-      "passed": 274,
-      "failed": 1,
+      "passed": 275,
+      "failed": 0,
       "skipped": 11,
       "frameworks": {
         "astro": {
@@ -184,8 +184,8 @@
         },
         "hono": {
           "total": 26,
-          "passed": 24,
-          "failed": 1
+          "passed": 25,
+          "failed": 0
         },
         "nextjs-turbopack": {
           "total": 26,
