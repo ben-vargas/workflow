@@ -786,9 +786,15 @@ importers:
       '@workflow/nitro':
         specifier: workspace:*
         version: link:../nitro
+      '@workflow/rollup':
+        specifier: workspace:*
+        version: link:../rollup
       '@workflow/swc-plugin':
         specifier: workspace:*
         version: link:../swc-plugin-workflow
+      '@workflow/vite':
+        specifier: workspace:*
+        version: link:../vite
       exsolve:
         specifier: ^1.0.7
         version: 1.0.7
