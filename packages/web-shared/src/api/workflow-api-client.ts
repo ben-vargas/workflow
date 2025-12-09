@@ -20,6 +20,7 @@ import {
   fetchRuns,
   fetchStep,
   fetchSteps,
+  fetchStreams,
   readStreamServerAction,
   recreateRun as recreateRunServerAction,
 } from './workflow-server-actions';
@@ -73,7 +74,15 @@ export async function unwrapServerActionResult<T>(
 ): Promise<
   { error: WorkflowWebAPIError; result: null } | { error: null; result: T }
 > {
-  const result = await promise;
+  let result: { success: boolean; data?: T; error?: ServerActionError };
+  try {
+    result = await promise;
+  } catch (error) {
+    result = {
+      success: false,
+      error: error as ServerActionError,
+    };
+  }
   if (!result.success) {
     console.error('[web-api-client] error', result.error);
     if (!result.error) {
@@ -1092,16 +1101,110 @@ export async function recreateRun(env: EnvMap, runId: string): Promise<string> {
   return resultData;
 }
 
+function isServerActionError(value: unknown): value is ServerActionError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'message' in value &&
+    'layer' in value &&
+    'cause' in value &&
+    'request' in value
+  );
+}
+
 export async function readStream(
   env: EnvMap,
   streamId: string,
   startIndex?: number
-): Promise<ReadableStream<Uint8Array>> {
+): Promise<ReadableStream<unknown>> {
+  try {
+    const stream = await readStreamServerAction(env, streamId, startIndex);
+    if (!stream) {
+      throw new WorkflowWebAPIError('Failed to read stream', {
+        layer: 'client',
+      });
+    }
+    if (isServerActionError(stream)) {
+      throw new WorkflowWebAPIError(stream.message, {
+        layer: 'client',
+        cause: stream.cause,
+        request: stream.request,
+      });
+    }
+    return stream;
+  } catch (error) {
+    if (error instanceof WorkflowWebAPIError) {
+      throw error;
+    }
+    throw new WorkflowWebAPIError('Failed to read stream', {
+      layer: 'client',
+      cause: error,
+    });
+  }
+}
+
+/**
+ * List all stream IDs for a run
+ */
+export async function listStreams(
+  env: EnvMap,
+  runId: string
+): Promise<string[]> {
   const { error, result } = await unwrapServerActionResult(
-    readStreamServerAction(env, streamId, startIndex)
+    fetchStreams(env, runId)
   );
   if (error) {
     throw error;
   }
   return result;
+}
+
+const STREAMS_REFRESH_INTERVAL_MS = 10000;
+
+/**
+ * Hook to fetch and manage stream list for a run
+ */
+export function useWorkflowStreams(
+  env: EnvMap,
+  runId: string,
+  refreshInterval: number = STREAMS_REFRESH_INTERVAL_MS
+) {
+  const [streams, setStreams] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await listStreams(env, runId);
+      setStreams(result);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setLoading(false);
+    }
+  }, [env, runId]);
+
+  // Initial load
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Auto-refresh interval
+  useEffect(() => {
+    if (!refreshInterval || refreshInterval <= 0) {
+      return;
+    }
+
+    const interval = setInterval(fetchData, refreshInterval);
+    return () => clearInterval(interval);
+  }, [refreshInterval, fetchData]);
+
+  return {
+    streams,
+    loading,
+    error,
+    refresh: fetchData,
+  };
 }
