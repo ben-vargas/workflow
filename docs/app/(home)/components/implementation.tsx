@@ -77,6 +77,7 @@ export const Implementation = () => (
               className:
                 'shadow-none !bg-background dark:bg-sidebar h-full rounded-md with-line-numbers',
             }}
+            highlight={['use workflow', 'use step']}
           />
         </div>
       ))}
