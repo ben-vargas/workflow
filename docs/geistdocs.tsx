@@ -54,23 +54,4 @@ export const translations = {
   en: {
     displayName: 'English',
   },
-  cn: {
-    displayName: 'Chinese (Mandarin)',
-    search: '搜尋文檔',
-  },
-  jp: {
-    displayName: 'Japanese',
-  },
-  es: {
-    displayName: 'Spanish',
-  },
-  pt: {
-    displayName: 'Portuguese',
-  },
-  id: {
-    displayName: 'Indonesian',
-  },
-  fr: {
-    displayName: 'French',
-  },
 };
