@@ -4,15 +4,16 @@ import { parseWorkflowName } from '@workflow/core/parse-name';
 import {
   cancelRun,
   recreateRun,
+  StreamViewer,
+  useWorkflowStreams,
   useWorkflowTraceViewerData,
   type WorkflowRun,
   WorkflowTraceViewer,
 } from '@workflow/web-shared';
-import { AlertCircle, HelpCircle, Loader2 } from 'lucide-react';
-// import { List, Network } from 'lucide-react';
+import { AlertCircle, HelpCircle, List, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -33,8 +34,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-// import { WorkflowGraphExecutionViewer } from '@/components/workflow-graph-execution-viewer';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Tooltip,
   TooltipContent,
@@ -42,8 +42,6 @@ import {
 } from '@/components/ui/tooltip';
 import { buildUrlWithConfig, worldConfigToEnvMap } from '@/lib/config';
 import type { WorldConfig } from '@/lib/config-world';
-// import { mapRunToExecution } from '@/lib/graph-execution-mapper';
-// import { useWorkflowGraphManifest } from '@/lib/use-workflow-graph';
 import { CancelButton } from './display-utils/cancel-button';
 import { CopyableText } from './display-utils/copyable-text';
 import { LiveStatus } from './display-utils/live-status';
@@ -65,15 +63,61 @@ export function RunDetailView({
   selectedId: _selectedId,
 }: RunDetailViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [cancelling, setCancelling] = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRerunDialog, setShowRerunDialog] = useState(false);
-  // const [activeTab, setActiveTab] = useState<'trace' | 'graph'>('trace');
   const env = useMemo(() => worldConfigToEnvMap(config), [config]);
 
+  // Read tab and streamId from URL search params
+  const activeTab = (searchParams.get('tab') as 'trace' | 'streams') || 'trace';
+  const selectedStreamId = searchParams.get('streamId');
+
+  // Helper to update URL search params
+  const updateSearchParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === null) {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      }
+      router.push(`?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams]
+  );
+
+  const setActiveTab = useCallback(
+    (tab: 'trace' | 'streams') => {
+      // When switching to trace tab, clear streamId
+      if (tab === 'trace') {
+        updateSearchParams({ tab, streamId: null });
+      } else {
+        updateSearchParams({ tab });
+      }
+    },
+    [updateSearchParams]
+  );
+
+  const setSelectedStreamId = useCallback(
+    (streamId: string | null) => {
+      updateSearchParams({ streamId });
+    },
+    [updateSearchParams]
+  );
+
+  // Handler for clicking on stream refs in the trace viewer
+  const handleStreamClick = useCallback(
+    (streamId: string) => {
+      updateSearchParams({ tab: 'streams', streamId });
+    },
+    [updateSearchParams]
+  );
+
   // Fetch workflow graph manifest
-  // TODO(Karthik): Uncomment after https://github.com/vercel/workflow/pull/455 is merged
   // const {
   //   manifest: graphManifest,
   //   loading: graphLoading,
@@ -92,6 +136,13 @@ export function RunDetailView({
     update,
   } = useWorkflowTraceViewerData(env, runId, { live: true });
   const run = runData ?? ({} as WorkflowRun);
+
+  // Fetch streams for this run
+  const {
+    streams,
+    loading: streamsLoading,
+    error: streamsError,
+  } = useWorkflowStreams(env, runId);
 
   // Find the workflow graph for this run
   // The manifest is keyed by workflowId which matches run.workflowName
@@ -252,7 +303,7 @@ export function RunDetailView({
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="flex flex-col h-[calc(100vh-88px)]">
+      <div className="flex flex-col h-[calc(100vh-97px)]">
         <div className="flex-none space-y-4">
           <Breadcrumb>
             <BreadcrumbList>
@@ -409,7 +460,7 @@ export function RunDetailView({
                       </p>
                     </TooltipContent>
                   </Tooltip>
-                  <div className="text-sm">
+                  <div className="text-xs">
                     <RelativeTime date={run.expiredAt} />
                   </div>
                 </div>
@@ -419,10 +470,9 @@ export function RunDetailView({
         </div>
 
         <div className="mt-4 flex-1 flex flex-col min-h-0">
-          {/* TODO(Karthik): Uncomment after https://github.com/vercel/workflow/pull/455 is merged */}
-          {/* <Tabs
+          <Tabs
             value={activeTab}
-            onValueChange={(v) => setActiveTab(v as 'trace' | 'graph')}
+            onValueChange={(v) => setActiveTab(v as 'trace' | 'streams')}
             className="flex-1 flex flex-col min-h-0"
           >
             <TabsList className="mb-4 flex-none">
@@ -430,10 +480,14 @@ export function RunDetailView({
                 <List className="h-4 w-4" />
                 Trace
               </TabsTrigger>
-              <TabsTrigger value="graph" className="gap-2">
+              <TabsTrigger value="streams" className="gap-2">
+                <List className="h-4 w-4" />
+                Streams
+              </TabsTrigger>
+              {/* <TabsTrigger value="graph" className="gap-2">
                 <Network className="h-4 w-4" />
                 Graph
-              </TabsTrigger>
+              </TabsTrigger> */}
             </TabsList>
 
             <TabsContent value="trace" className="mt-0 flex-1 min-h-0">
@@ -446,11 +500,96 @@ export function RunDetailView({
                   env={env}
                   run={run}
                   isLoading={loading}
+                  onStreamClick={handleStreamClick}
                 />
               </div>
             </TabsContent>
 
-            <TabsContent value="graph" className="mt-0 flex-1 min-h-0">
+            <TabsContent value="streams" className="mt-0 flex-1 min-h-0">
+              <div className="h-full flex gap-4">
+                {/* Stream list sidebar */}
+                <div
+                  className="w-64 flex-shrink-0 border rounded-lg overflow-hidden"
+                  style={{
+                    borderColor: 'var(--ds-gray-300)',
+                    backgroundColor: 'var(--ds-background-100)',
+                  }}
+                >
+                  <div
+                    className="px-3 py-2 border-b text-xs font-medium"
+                    style={{
+                      borderColor: 'var(--ds-gray-300)',
+                      color: 'var(--ds-gray-900)',
+                    }}
+                  >
+                    Streams ({streams.length})
+                  </div>
+                  <div className="overflow-auto max-h-[calc(100vh-400px)]">
+                    {streamsLoading ? (
+                      <div className="p-4 flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : streamsError ? (
+                      <div className="p-4 text-xs text-destructive">
+                        {streamsError.message}
+                      </div>
+                    ) : streams.length === 0 ? (
+                      <div
+                        className="p-4 text-xs"
+                        style={{ color: 'var(--ds-gray-600)' }}
+                      >
+                        No streams found for this run
+                      </div>
+                    ) : (
+                      streams.map((streamId) => (
+                        <button
+                          key={streamId}
+                          type="button"
+                          onClick={() => setSelectedStreamId(streamId)}
+                          className="w-full text-left px-3 py-2 text-xs font-mono truncate hover:bg-accent transition-colors"
+                          style={{
+                            backgroundColor:
+                              selectedStreamId === streamId
+                                ? 'var(--ds-gray-200)'
+                                : 'transparent',
+                            color: 'var(--ds-gray-1000)',
+                          }}
+                          title={streamId}
+                        >
+                          {streamId}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Stream viewer */}
+                <div className="flex-1 min-w-0">
+                  {selectedStreamId ? (
+                    <StreamViewer env={env} streamId={selectedStreamId} />
+                  ) : (
+                    <div
+                      className="h-full flex items-center justify-center rounded-lg border"
+                      style={{
+                        borderColor: 'var(--ds-gray-300)',
+                        backgroundColor: 'var(--ds-gray-100)',
+                      }}
+                    >
+                      <div
+                        className="text-sm"
+                        style={{ color: 'var(--ds-gray-600)' }}
+                      >
+                        {streams.length > 0
+                          ? 'Select a stream to view its data'
+                          : 'No streams available'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* <TabsContent value="graph" className="mt-0 flex-1 min-h-0">
               <div className="h-full min-h-[500px]">
                 {graphLoading ? (
                   <div className="flex items-center justify-center w-full h-full">
@@ -487,21 +626,8 @@ export function RunDetailView({
                   />
                 )}
               </div>
-            </TabsContent>
-          </Tabs> */}
-
-          {/* Default trace view */}
-          <div className="h-full flex-1 min-h-0">
-            <WorkflowTraceViewer
-              error={error}
-              steps={allSteps}
-              events={allEvents}
-              hooks={allHooks}
-              env={env}
-              run={run}
-              isLoading={loading}
-            />
-          </div>
+            </TabsContent> */}
+          </Tabs>
 
           {auxiliaryDataLoading && (
             <div className="fixed flex items-center gap-2 left-8 bottom-8 bg-background border rounded-md px-4 py-2 shadow-lg">

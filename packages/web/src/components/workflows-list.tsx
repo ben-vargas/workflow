@@ -19,8 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { WorkflowGraphViewer } from '@/components/workflow-graph-viewer';
-import type { WorkflowGraph } from '@/lib/workflow-graph-types';
+import { WorkflowGraphViewer } from '@/components/flow-graph/workflow-graph-viewer';
+import type { WorkflowGraph } from '@/lib/flow-graph/workflow-graph-types';
 import { TableSkeleton } from './display-utils/table-skeleton';
 
 interface WorkflowsListProps {
