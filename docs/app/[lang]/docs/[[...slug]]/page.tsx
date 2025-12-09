@@ -20,7 +20,7 @@ import { ScrollTop } from '@/components/geistdocs/scroll-top';
 import * as AccordionComponents from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { getLLMText, getPageImage, source } from '@/lib/geistdocs/source';
+import { getLLMText, source } from '@/lib/geistdocs/source';
 import { TSDoc } from '@/lib/tsdoc';
 
 const Page = async ({ params }: PageProps<'/[lang]/docs/[[...slug]]'>) => {
@@ -91,9 +91,6 @@ export const generateMetadata = async ({
   const metadata: Metadata = {
     title: page.data.title,
     description: page.data.description,
-    openGraph: {
-      images: getPageImage(page).url,
-    },
   };
 
   return metadata;
