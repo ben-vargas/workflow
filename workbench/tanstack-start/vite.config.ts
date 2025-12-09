@@ -4,11 +4,11 @@ import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 import { defineConfig } from 'vite';
 import viteTsConfigPaths from 'vite-tsconfig-paths';
-import { workflowPlugin } from 'workflow/tanstack-start';
+import { workflow } from 'workflow/vite';
 
 const config = defineConfig({
   plugins: [
-    workflowPlugin(),
+    workflow(),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
@@ -18,8 +18,8 @@ const config = defineConfig({
     tailwindcss(),
     viteReact(),
   ],
-  optimizeDeps: {
-    exclude: ['unicorn-magic'],
+  nitro: {
+    plugins: ['./plugins/start-pg-world.ts'],
   },
 });
 
