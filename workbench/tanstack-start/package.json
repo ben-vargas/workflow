@@ -9,11 +9,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "serve": "vite preview",
-    "start": "node ./scripts/start-with-pg.mjs",
-    "test": "vitest run",
-    "format": "biome format",
-    "lint": "biome lint",
-    "check": "biome check"
+    "start": "node ./scripts/start-with-pg.mjs"
   },
   "license": "Apache-2.0",
   "dependencies": {
@@ -33,7 +29,6 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.4",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.2.0",
     "@types/node": "^22.10.2",
