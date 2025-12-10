@@ -1,6 +1,10 @@
 {
   "name": "@workflow/example-elysiajs",
-  "version": "1.0.50",
+  "version": "0.0.0",
+  "private": true,
+  "description": "",
+  "type": "module",
+  "main": "index.js",
   "scripts": {
     "generate:workflows": "node ../scripts/generate-workflows-registry.js",
     "predev": "pnpm generate:workflows",
@@ -23,6 +27,5 @@
     "openai": "^6.1.0",
     "workflow": "workspace:*",
     "zod": "catalog:"
-  },
-  "module": "src/index.js"
+  }
 }
