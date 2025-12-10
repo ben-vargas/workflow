@@ -1,7 +1,14 @@
 'use server';
 
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { hydrateResourceIO } from '@workflow/core/observability';
 import { createWorld, start } from '@workflow/core/runtime';
+import {
+  getDeserializeStream,
+  getExternalRevivers,
+} from '@workflow/core/serialization';
+import { WorkflowAPIError, WorkflowRunNotFoundError } from '@workflow/errors';
 import type {
   Event,
   Hook,
@@ -24,11 +31,15 @@ export interface PaginatedResult<T> {
  */
 export interface ServerActionError {
   message: string;
+  // "Server" if the error originates in this file, "API" if the error originates in the World interface
   layer: 'server' | 'API';
   cause?: string;
   request?: {
     operation: string;
     params: Record<string, any>;
+    status?: number;
+    url?: string;
+    code?: string;
   };
 }
 
@@ -83,47 +94,85 @@ function getWorldFromEnv(envMap: EnvMap) {
 /**
  * Creates a structured error object from a caught error
  */
-function createServerActionError(
+function createServerActionError<T>(
   error: unknown,
   operation: string,
-  params?: Record<string, any>
-): ServerActionError {
+  requestParams?: Record<string, any>
+): ServerActionResult<T> {
   const err = error instanceof Error ? error : new Error(String(error));
+  console.error(`[web-api] ${operation} error:`, err);
+  let errorResponse: ServerActionError;
 
-  // Determine if this is an API layer error (from the World interface)
-  // or a server layer error (from within the server action)
-  const isAPIError =
-    err.message?.includes('fetch') ||
-    err.message?.includes('HTTP') ||
-    err.message?.includes('network');
+  console.warn('isWorkflowAPIError(error)', WorkflowAPIError.is(error));
+  console.warn(
+    'error.status',
+    WorkflowAPIError.is(error) ? error.status : undefined
+  );
+  console.warn('error.url', WorkflowAPIError.is(error) ? error.url : undefined);
+  console.warn(
+    'error.code',
+    WorkflowAPIError.is(error) ? error.code : undefined
+  );
 
-  const actionError: ServerActionError = {
-    message: getUserFacingMessage(err),
-    layer: isAPIError ? 'API' : 'server',
-    cause: err.stack || err.message,
-    request: params ? { operation, params } : undefined,
+  if (WorkflowAPIError.is(error)) {
+    // If the World threw the error on fetch/fs.read, we add that data
+    // to the error object
+    errorResponse = {
+      message: getUserFacingErrorMessage(err, error.status),
+      layer: 'API',
+      cause: err.stack || err.message,
+      request: {
+        operation,
+        params: requestParams ?? {},
+        status: error.status,
+        url: error.url,
+        code: error.code ?? undefined,
+      },
+    };
+  } else if (WorkflowRunNotFoundError.is(error)) {
+    // The World might repackage the error as a WorkflowRunNotFoundError
+    errorResponse = {
+      message: getUserFacingErrorMessage(error, 404),
+      layer: 'API',
+      cause: err.stack || err.message,
+      request: { operation, status: 404, params: requestParams ?? {} },
+    };
+  } else {
+    errorResponse = {
+      message: getUserFacingErrorMessage(err),
+      layer: 'server',
+      cause: err.stack || err.message,
+      request: { status: 500, operation, params: requestParams ?? {} },
+    };
+  }
+
+  return {
+    success: false,
+    error: errorResponse,
   };
-  return actionError;
 }
 
 /**
  * Converts an error into a user-facing message
  */
-function getUserFacingMessage(error: Error): string {
+function getUserFacingErrorMessage(error: Error, status?: number): string {
+  console.warn('getUserFacingErrorMessage', error, status);
+  if (!status) {
+    console.warn('No status, returning error message', error.message);
+    return 'Error creating response: ' + error.message;
+  }
+
   // Check for common error patterns
-  if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+  if (status === 403 || status === 401) {
     return 'Access denied. Please check your credentials and permissions.';
   }
 
-  if (error.message?.includes('404') || error.message?.includes('Not Found')) {
+  if (status === 404) {
     return 'The requested resource was not found.';
   }
 
-  if (
-    error.message?.includes('500') ||
-    error.message?.includes('Internal Server Error')
-  ) {
-    return 'An internal server error occurred. Please try again later.';
+  if (status === 500) {
+    return 'Error connecting to World backend, please try again later.';
   }
 
   if (error.message?.includes('Network') || error.message?.includes('fetch')) {
@@ -197,11 +246,11 @@ export async function fetchRuns(
       hasMore: result.hasMore,
     });
   } catch (error) {
-    console.error('Failed to fetch runs:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.runs.list', params),
-    };
+    return createServerActionError<PaginatedResult<WorkflowRun>>(
+      error,
+      'world.runs.list',
+      params
+    );
   }
 }
 
@@ -219,14 +268,10 @@ export async function fetchRun(
     const hydratedRun = hydrate(run as WorkflowRun);
     return createResponse(hydratedRun);
   } catch (error) {
-    console.error('Failed to fetch run:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.runs.get', {
-        runId,
-        resolveData,
-      }),
-    };
+    return createServerActionError<WorkflowRun>(error, 'world.runs.get', {
+      runId,
+      resolveData,
+    });
   }
 }
 
@@ -256,14 +301,14 @@ export async function fetchSteps(
       hasMore: result.hasMore,
     });
   } catch (error) {
-    console.error('Failed to fetch steps:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.steps.list', {
+    return createServerActionError<PaginatedResult<Step>>(
+      error,
+      'world.steps.list',
+      {
         runId,
         ...params,
-      }),
-    };
+      }
+    );
   }
 }
 
@@ -282,15 +327,11 @@ export async function fetchStep(
     const hydratedStep = hydrate(step as Step);
     return createResponse(hydratedStep);
   } catch (error) {
-    console.error('Failed to fetch step:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.steps.get', {
-        runId,
-        stepId,
-        resolveData,
-      }),
-    };
+    return createServerActionError<Step>(error, 'world.steps.get', {
+      runId,
+      stepId,
+      resolveData,
+    });
   }
 }
 
@@ -320,14 +361,14 @@ export async function fetchEvents(
       hasMore: result.hasMore,
     });
   } catch (error) {
-    console.error('Failed to fetch events:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.events.list', {
+    return createServerActionError<PaginatedResult<Event>>(
+      error,
+      'world.events.list',
+      {
         runId,
         ...params,
-      }),
-    };
+      }
+    );
   }
 }
 
@@ -358,15 +399,14 @@ export async function fetchEventsByCorrelationId(
       hasMore: result.hasMore,
     });
   } catch (error) {
-    console.error('Failed to fetch events by correlation ID:', error);
-    return {
-      success: false,
-      error: createServerActionError(
-        error,
-        'world.events.listByCorrelationId',
-        { correlationId, ...params }
-      ),
-    };
+    return createServerActionError<PaginatedResult<Event>>(
+      error,
+      'world.events.listByCorrelationId',
+      {
+        correlationId,
+        ...params,
+      }
+    );
   }
 }
 
@@ -396,11 +436,11 @@ export async function fetchHooks(
       hasMore: result.hasMore,
     });
   } catch (error) {
-    console.error('Failed to fetch hooks:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.hooks.list', params),
-    };
+    return createServerActionError<PaginatedResult<Hook>>(
+      error,
+      'world.hooks.list',
+      params
+    );
   }
 }
 
@@ -417,14 +457,10 @@ export async function fetchHook(
     const hook = await world.hooks.get(hookId, { resolveData });
     return createResponse(hydrate(hook as Hook));
   } catch (error) {
-    console.error('Failed to fetch hook:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.hooks.get', {
-        hookId,
-        resolveData,
-      }),
-    };
+    return createServerActionError<Hook>(error, 'world.hooks.get', {
+      hookId,
+      resolveData,
+    });
   }
 }
 
@@ -440,11 +476,7 @@ export async function cancelRun(
     await world.runs.cancel(runId);
     return createResponse(undefined);
   } catch (error) {
-    console.error('Failed to cancel run:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.runs.cancel', { runId }),
-    };
+    return createServerActionError<void>(error, 'world.runs.cancel', { runId });
   }
 }
 
@@ -471,11 +503,7 @@ export async function recreateRun(
     );
     return createResponse(newRun.runId);
   } catch (error) {
-    console.error('Failed to start run:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'recreateRun', { runId }),
-    };
+    return createServerActionError<string>(error, 'recreateRun', { runId });
   }
 }
 
@@ -483,19 +511,143 @@ export async function readStreamServerAction(
   env: EnvMap,
   streamId: string,
   startIndex?: number
-): Promise<ServerActionResult<ReadableStream<Uint8Array>>> {
+): Promise<ReadableStream<unknown> | ServerActionError> {
   try {
     const world = getWorldFromEnv(env);
+    // We should probably use getRun().getReadable() instead, to make the UI
+    // more consistent with runtime behavior, and also expose a "replay" and "startIndex",
+    // feature, to allow for testing World behavior.
     const stream = await world.readFromStream(streamId, startIndex);
-    return createResponse(stream);
+
+    const revivers = getExternalRevivers(globalThis, [], '');
+    const transform = getDeserializeStream(revivers);
+
+    return stream.pipeThrough(transform);
   } catch (error) {
-    console.error('Failed to read stream:', error);
-    return {
-      success: false,
-      error: createServerActionError(error, 'world.readFromStream', {
-        streamId,
-        startIndex,
-      }),
-    };
+    const actionError = createServerActionError(error, 'world.readFromStream', {
+      streamId,
+      startIndex,
+    });
+    if (!actionError.success) {
+      return actionError.error;
+    }
+    // Shouldn't happen, this is just a type guard
+    throw new Error();
   }
+}
+
+/**
+ * List all stream IDs for a run
+ */
+export async function fetchStreams(
+  env: EnvMap,
+  runId: string
+): Promise<ServerActionResult<string[]>> {
+  try {
+    const world = getWorldFromEnv(env);
+    const streams = await world.listStreamsByRunId(runId);
+    return createResponse(streams);
+  } catch (error) {
+    return createServerActionError<string[]>(
+      error,
+      'world.listStreamsByRunId',
+      {
+        runId,
+      }
+    );
+  }
+}
+
+/**
+ * Fetch the workflows manifest from the workflow route directory
+ * The manifest is generated at build time and contains static structure info about workflows
+ *
+ * Configuration priority:
+ * 1. WORKFLOW_MANIFEST_PATH - explicit path to the manifest file
+ * 2. Standard Next.js app router locations (app/.well-known/workflow/v1/manifest.json)
+ * 3. WORKFLOW_EMBEDDED_DATA_DIR - legacy data directory
+ */
+export async function fetchWorkflowsManifest(
+  worldEnv: EnvMap
+): Promise<ServerActionResult<any>> {
+  const cwd = process.cwd();
+
+  console.log('[fetchWorkflowsManifest] cwd:', cwd);
+  console.log(
+    '[fetchWorkflowsManifest] WORKFLOW_MANIFEST_PATH from env:',
+    worldEnv.WORKFLOW_MANIFEST_PATH
+  );
+
+  // Helper to resolve path (absolute or relative to cwd)
+  const resolvePath = (p: string) =>
+    path.isAbsolute(p) ? p : path.join(cwd, p);
+
+  // Build list of paths to try, in priority order
+  const manifestPaths: string[] = [];
+
+  // 1. Explicit manifest path configuration (highest priority)
+  if (worldEnv.WORKFLOW_MANIFEST_PATH) {
+    manifestPaths.push(resolvePath(worldEnv.WORKFLOW_MANIFEST_PATH));
+  }
+  if (process.env.WORKFLOW_MANIFEST_PATH) {
+    manifestPaths.push(resolvePath(process.env.WORKFLOW_MANIFEST_PATH));
+  }
+
+  // 2. Standard Next.js app router locations
+  manifestPaths.push(
+    path.join(cwd, 'app/.well-known/workflow/v1/manifest.json'),
+    path.join(cwd, 'src/app/.well-known/workflow/v1/manifest.json')
+  );
+
+  // 3. Legacy data directory locations
+  if (worldEnv.WORKFLOW_EMBEDDED_DATA_DIR) {
+    manifestPaths.push(
+      path.join(
+        resolvePath(worldEnv.WORKFLOW_EMBEDDED_DATA_DIR),
+        'manifest.json'
+      )
+    );
+  }
+  if (process.env.WORKFLOW_EMBEDDED_DATA_DIR) {
+    manifestPaths.push(
+      path.join(
+        resolvePath(process.env.WORKFLOW_EMBEDDED_DATA_DIR),
+        'manifest.json'
+      )
+    );
+  }
+
+  console.log('[fetchWorkflowsManifest] Trying paths:', manifestPaths);
+
+  // Try each path until we find the manifest
+  for (const manifestPath of manifestPaths) {
+    try {
+      const content = await fs.readFile(manifestPath, 'utf-8');
+      const manifest = JSON.parse(content);
+      const workflowCount = Object.keys(manifest.workflows || {}).reduce(
+        (acc, filePath) =>
+          acc + Object.keys(manifest.workflows[filePath] || {}).length,
+        0
+      );
+      console.log(
+        `[fetchWorkflowsManifest] Found manifest at: ${manifestPath} with ${workflowCount} workflows`
+      );
+      return createResponse(manifest);
+    } catch (err) {
+      console.log(
+        `[fetchWorkflowsManifest] Failed to read: ${manifestPath}`,
+        (err as Error).message
+      );
+      // Continue to next path
+    }
+  }
+
+  // If no manifest found, return an empty manifest
+  // This allows the UI to work without workflows graph data
+  console.log('[fetchWorkflowsManifest] No manifest found, returning empty');
+  return createResponse({
+    version: '1.0.0',
+    steps: {},
+    workflows: {},
+  });
 }
