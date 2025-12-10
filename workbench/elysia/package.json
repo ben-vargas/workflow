@@ -1,0 +1,22 @@
+{
+  "name": "@workflow/example-elysiajs",
+  "version": "1.0.50",
+  "scripts": {
+    "generate:workflows": "node ../scripts/generate-workflows-registry.js",
+    "predev": "pnpm generate:workflows",
+    "prebuild": "pnpm generate:workflows",
+    "build": "nitro build",
+    "dev": "nitro dev",
+    "start": "node .output/server/index.mjs"
+  },
+  "dependencies": {
+    "elysia": "latest",
+    "nitro": "catalog:",
+    "workflow": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "rollup": "^4.53.3"
+  },
+  "module": "src/index.js"
+}
