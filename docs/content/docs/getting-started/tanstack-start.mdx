@@ -23,30 +23,24 @@ Enter the newly made directory:
 cd my-workflow-app
 ```
 
-### Install `workflow` and `nitro`
+### Install `workflow`
 
 ```package-install
-npm i workflow nitro
+npm i workflow
 ```
-
-<Callout>
-While Tanstack Start provides the build tooling and development server, Nitro creates the workflow routes and adds client transforms needed for Workflow DevKit. Learn more about Nitro [here](https://v3.nitro.build).
-</Callout>
 
 ### Configure Tanstack Start
 
-Add `nitro()` and `workflow()` to your Vite config. This enables usage of the `"use workflow"` and `"use step"` directives.
+Add `workflow()` to your Vite config. This enables usage of the `"use workflow"` and `"use step"` directives.
 
 ```ts title="vite.config.ts" lineNumbers
 // ...
 import { workflow } from "workflow/vite"
-import { nitro } from "nitro/vite"
 
 const config = defineConfig({
   plugins: [
-    workflow(), // [!code highlight]
-    nitro(), // [!code highlight]
     // ...
+    workflow(), // [!code highlight]
   ],
 })
 
@@ -169,17 +163,24 @@ We'll dive deeper into workflows, steps, and other ways to suspend or handle eve
 To invoke your new workflow, we'll have to add your workflow to a `POST` API route handler, `src/routes/api/signup.ts` with the following code:
 
 ```typescript title="src/routes/api/signup.ts"
+import { createFileRoute } from "@tanstack/react-router";
+import { json } from "@tanstack/react-start";
 import { start } from "workflow/api";
-import { defineEventHandler } from "nitro/h3";
-import { handleUserSignup } from "../../../workflows/user-signup";
+import { handleUserSignup } from "@/workflows/user-signup";
 
-export default defineEventHandler(async ({ req }) => {
-  const { email } = await req.json() as { email: string };
-  // Executes asynchronously and doesn't block your app
-  await start(handleUserSignup, [email]);
-  return {
-    message: "User signup workflow started",
-  }
+export const Route = createFileRoute("/api/signup")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const { email } = await request.json();
+        // Executes asynchronously and doesn't block your app
+        await start(handleUserSignup, [email]);
+        return json({
+          message: "User signup workflow started",
+        });
+      },
+    },
+  },
 });
 ```
 
