@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ThemeProvider, useTheme } from 'next-themes';
 import { useEffect, useRef } from 'react';
 import { ConnectionStatus } from '@/components/display-utils/connection-status';
+import { EndpointsHealthStatus } from '@/components/display-utils/endpoints-health-status';
 import { SettingsDropdown } from '@/components/settings-dropdown';
 import { Toaster } from '@/components/ui/sonner';
 import { buildUrlWithConfig, useQueryParamConfig } from '@/lib/config';
@@ -144,7 +145,8 @@ function LayoutContent({ children }: LayoutClientProps) {
                 <Logo />
               </h1>
             </Link>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-4">
+              <EndpointsHealthStatus config={config} />
               <ConnectionStatus config={config} />
               <SettingsDropdown />
             </div>
