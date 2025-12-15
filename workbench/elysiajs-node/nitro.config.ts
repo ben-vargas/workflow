@@ -7,8 +7,7 @@ export default defineNitroConfig({
     '/**': './src/index.ts',
   },
   // NOTE: `bun` preset doesn't work as expected since Nitro does not pass
-  // the `idleTimeout` option through Elysia, causing workflow suspensions > 10s
-  // to fail
+  // the `idleTimeout` option through Elysia, causing workflow suspensions > 10s to fail
   // preset: "bun"
   plugins: ['plugins/start-pg-world.ts'],
 });

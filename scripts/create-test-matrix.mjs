@@ -146,7 +146,7 @@ matrix.app.push({
 matrix.app.push({
   name: 'elysiajs-node',
   project: 'workbench-elysiajs-node-workflow',
-  ...DEV_TEST_CONFIGS.elysiajs,
+  ...DEV_TEST_CONFIGS['elysiajs-node'],
 });
 
 console.log(JSON.stringify(matrix));
