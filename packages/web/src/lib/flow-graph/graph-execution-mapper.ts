@@ -174,12 +174,6 @@ function calculateEdgeTraversals(
 
       if (winnerNodeId) {
         raceWinners.set(groupId, winnerNodeId);
-        console.log('[Edge Traversals] Promise.race winner:', {
-          groupId,
-          winnerNodeId,
-          earliestCompletion: earliestCompletion?.toISOString(),
-          allNodes: group.nodes.map((n) => n.id),
-        });
       }
     }
   }
@@ -218,15 +212,7 @@ function calculateEdgeTraversals(
     if (sourceGroupId && sourceMethod === 'race') {
       // For Promise.race: only mark edge from the winner as traversed
       const winner = raceWinners.get(sourceGroupId);
-      const isWinner = winner === edge.source;
-      console.log('[Edge Traversals] Race edge:', {
-        edgeId: edge.id,
-        source: edge.source,
-        winner,
-        isWinner,
-        willMark: isWinner && targetExecuted,
-      });
-      if (isWinner && targetExecuted) {
+      if (winner === edge.source && targetExecuted) {
         markEdgeTraversed(edge);
       }
       // Don't mark edges from non-winners even if both nodes executed
