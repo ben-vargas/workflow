@@ -145,7 +145,7 @@ matrix.app.push({
 
 matrix.app.push({
   name: 'tanstack-start',
-  project: 'workbench-tanstack-workflow',
+  project: 'workbench-tanstack-start-workflow',
   ...DEV_TEST_CONFIGS['tanstack-start'],
 });
 
