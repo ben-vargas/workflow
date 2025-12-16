@@ -311,26 +311,35 @@ export function workflowEntrypoint(
               const events = await getAllWorkflowRunEvents(workflowRun.runId);
 
               // Check for any elapsed waits and create wait_completed events
+              // Pre-compute completed correlation IDs for O(1) lookup instead of O(n)
               const now = Date.now();
-              for (const event of events) {
-                if (event.eventType === 'wait_created') {
-                  const resumeAt = event.eventData.resumeAt as Date;
-                  const hasCompleted = events.some(
-                    (e) =>
-                      e.eventType === 'wait_completed' &&
-                      e.correlationId === event.correlationId
-                  );
+              const completedWaitIds = new Set(
+                events
+                  .filter((e) => e.eventType === 'wait_completed')
+                  .map((e) => e.correlationId)
+              );
 
-                  // If wait has elapsed and hasn't been completed yet
-                  if (!hasCompleted && now >= resumeAt.getTime()) {
-                    const completedEvent = await world.events.create(runId, {
+              // Collect all waits that need to be completed
+              const waitsToComplete = events.filter(
+                (e): e is typeof e & { correlationId: string } =>
+                  e.eventType === 'wait_created' &&
+                  e.correlationId !== undefined &&
+                  !completedWaitIds.has(e.correlationId) &&
+                  now >= (e.eventData.resumeAt as Date).getTime()
+              );
+
+              // Create all wait_completed events in parallel
+              if (waitsToComplete.length > 0) {
+                const completedEvents = await Promise.all(
+                  waitsToComplete.map((waitEvent) =>
+                    world.events.create(runId, {
                       eventType: 'wait_completed',
-                      correlationId: event.correlationId,
-                    });
-                    // Add the event to the events array so the workflow can see it
-                    events.push(completedEvent);
-                  }
-                }
+                      correlationId: waitEvent.correlationId,
+                    })
+                  )
+                );
+                // Add all events to the events array so the workflow can see them
+                events.push(...completedEvents);
               }
 
               const result = await runWorkflow(
