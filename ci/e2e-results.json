@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-01-07T15:23:52.250Z",
-  "commit": "05ecfbcc11508defc7ccd0a8b67839eaef631e71",
+  "lastUpdated": "2026-01-08T03:15:10.599Z",
+  "commit": "dc44dab49d5f517d996f1f7095194c68a8399996",
   "branch": "main",
   "type": "e2e",
   "worlds": {
@@ -14,13 +14,13 @@
       "progress": 97
     },
     "redis": {
-      "status": "passing",
+      "status": "partial",
       "total": 37,
-      "passed": 37,
-      "failed": 0,
+      "passed": 36,
+      "failed": 1,
       "skipped": 0,
       "frameworks": {},
-      "progress": 100
+      "progress": 97
     },
     "starter": {
       "status": "partial",
@@ -101,10 +101,10 @@
       "progress": 98
     },
     "postgres": {
-      "status": "passing",
+      "status": "partial",
       "total": 408,
-      "passed": 400,
-      "failed": 0,
+      "passed": 399,
+      "failed": 1,
       "skipped": 8,
       "frameworks": {
         "astro": {
@@ -114,8 +114,8 @@
         },
         "express": {
           "total": 34,
-          "passed": 33,
-          "failed": 0
+          "passed": 32,
+          "failed": 1
         },
         "fastify": {
           "total": 34,
