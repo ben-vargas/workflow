@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-02-04T21:24:56.680Z",
-  "commit": "b895446bc37f0342d97db0ec9a93d0541ae6e587",
+  "lastUpdated": "2026-02-05T03:36:09.304Z",
+  "commit": "fed805a15f0ad6ac8de04abbb6163f1ea09ead16",
   "branch": "main",
   "type": "e2e",
   "worlds": {
@@ -34,17 +34,17 @@
     "turso": {
       "status": "partial",
       "total": 50,
-      "passed": 7,
-      "failed": 43,
+      "passed": 8,
+      "failed": 42,
       "skipped": 0,
       "frameworks": {},
-      "progress": 14
+      "progress": 16
     },
     "local": {
-      "status": "passing",
+      "status": "partial",
       "total": 1269,
-      "passed": 1197,
-      "failed": 0,
+      "passed": 1154,
+      "failed": 43,
       "skipped": 72,
       "frameworks": {
         "astro": {
@@ -84,8 +84,8 @@
         },
         "nuxt": {
           "total": 94,
-          "passed": 86,
-          "failed": 0
+          "passed": 43,
+          "failed": 43
         },
         "sveltekit": {
           "total": 94,
@@ -98,7 +98,7 @@
           "failed": 0
         }
       },
-      "progress": 94
+      "progress": 91
     },
     "postgres": {
       "status": "passing",
