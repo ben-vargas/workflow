@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-02-07T03:23:01.935Z",
-  "commit": "82c209c66969eabbd07be3431e56ad25fbf72bf6",
+  "lastUpdated": "2026-02-07T21:20:34.285Z",
+  "commit": "ef23b0be770bbb5ccca015fb2564953fe6a761d7",
   "branch": "main",
   "type": "e2e",
   "worlds": {
@@ -25,20 +25,20 @@
     "starter": {
       "status": "partial",
       "total": 50,
+      "passed": 6,
+      "failed": 41,
+      "skipped": 3,
+      "frameworks": {},
+      "progress": 12
+    },
+    "turso": {
+      "status": "partial",
+      "total": 50,
       "passed": 7,
       "failed": 40,
       "skipped": 3,
       "frameworks": {},
       "progress": 14
-    },
-    "turso": {
-      "status": "partial",
-      "total": 50,
-      "passed": 8,
-      "failed": 39,
-      "skipped": 3,
-      "frameworks": {},
-      "progress": 16
     },
     "local": {
       "status": "passing",
