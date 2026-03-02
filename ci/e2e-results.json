@@ -1,17 +1,17 @@
 {
-  "lastUpdated": "2026-03-02T03:27:23.045Z",
-  "commit": "d69c80b79d24bb7031f91a118cba938b3b5ae9f3",
+  "lastUpdated": "2026-03-02T21:39:52.116Z",
+  "commit": "596f9bf139da834d6960e0fe0585cbf477c9eb8d",
   "branch": "main",
   "type": "e2e",
   "worlds": {
     "mongodb": {
-      "status": "passing",
+      "status": "partial",
       "total": 56,
-      "passed": 53,
-      "failed": 0,
+      "passed": 52,
+      "failed": 1,
       "skipped": 3,
       "frameworks": {},
-      "progress": 95
+      "progress": 93
     },
     "redis": {
       "status": "passing",
@@ -92,10 +92,10 @@
       "progress": 89
     },
     "postgres": {
-      "status": "partial",
+      "status": "passing",
       "total": 689,
-      "passed": 613,
-      "failed": 1,
+      "passed": 614,
+      "failed": 0,
       "skipped": 75,
       "frameworks": {
         "astro": {
@@ -110,8 +110,8 @@
         },
         "fastify": {
           "total": 53,
-          "passed": 45,
-          "failed": 1
+          "passed": 46,
+          "failed": 0
         },
         "hono": {
           "total": 53,
