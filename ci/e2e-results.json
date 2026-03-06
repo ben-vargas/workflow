@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-03-05T21:31:27.157Z",
-  "commit": "02f706fb99d2ffa3f862698092d17cedbdb8ba02",
+  "lastUpdated": "2026-03-06T03:30:19.577Z",
+  "commit": "dff00c94008f60cbfb4a398f2b98101d80ee8377",
   "branch": "main",
   "type": "e2e",
   "worlds": {
@@ -105,8 +105,8 @@
         },
         "express": {
           "total": 56,
-          "passed": 47,
-          "failed": 0
+          "passed": 46,
+          "failed": 1
         },
         "fastify": {
           "total": 56,
@@ -140,8 +140,8 @@
         },
         "sveltekit": {
           "total": 56,
-          "passed": 46,
-          "failed": 1
+          "passed": 47,
+          "failed": 0
         },
         "vite": {
           "total": 56,
