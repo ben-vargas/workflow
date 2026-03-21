@@ -1,135 +1,155 @@
 {
-  "lastUpdated": "2026-03-20T22:07:07.762Z",
-  "commit": "e889860984804095170805187ddeb00acf91d0a9",
+  "lastUpdated": "2026-03-21T03:06:07.349Z",
+  "commit": "823f58e5c6a20f25b128088f50abf2c5a9303269",
   "branch": "main",
   "type": "e2e",
   "worlds": {
     "mongodb": {
       "status": "partial",
       "total": 65,
-      "passed": 58,
+      "passed": 56,
       "failed": 2,
-      "skipped": 5,
+      "skipped": 7,
       "frameworks": {},
-      "progress": 89
+      "progress": 86
     },
     "redis": {
       "status": "partial",
       "total": 65,
-      "passed": 58,
+      "passed": 56,
       "failed": 2,
-      "skipped": 5,
+      "skipped": 7,
       "frameworks": {},
-      "progress": 89
+      "progress": 86
     },
     "turso": {
       "status": "partial",
       "total": 65,
       "passed": 7,
-      "failed": 53,
-      "skipped": 5,
+      "failed": 51,
+      "skipped": 7,
       "frameworks": {},
       "progress": 11
     },
     "local": {
       "status": "passing",
-      "total": 1617,
-      "passed": 1436,
+      "total": 2002,
+      "passed": 1713,
       "failed": 0,
-      "skipped": 181,
+      "skipped": 289,
       "frameworks": {
+        "astro": {
+          "total": 154,
+          "passed": 132,
+          "failed": 0
+        },
         "express": {
           "total": 154,
-          "passed": 136,
+          "passed": 132,
           "failed": 0
         },
         "fastify": {
           "total": 154,
-          "passed": 136,
+          "passed": 132,
           "failed": 0
         },
         "hono": {
           "total": 154,
-          "passed": 136,
+          "passed": 132,
           "failed": 0
         },
         "nextjs-turbopack": {
-          "total": 231,
-          "passed": 222,
+          "total": 308,
+          "passed": 271,
           "failed": 0
         },
         "nextjs-webpack": {
           "total": 308,
-          "passed": 262,
+          "passed": 254,
           "failed": 0
         },
         "nitro": {
           "total": 154,
-          "passed": 136,
+          "passed": 132,
           "failed": 0
         },
         "nuxt": {
           "total": 154,
-          "passed": 136,
+          "passed": 132,
+          "failed": 0
+        },
+        "sveltekit": {
+          "total": 154,
+          "passed": 132,
           "failed": 0
         },
         "vite": {
           "total": 154,
-          "passed": 136,
+          "passed": 132,
           "failed": 0
         }
       },
-      "progress": 89
+      "progress": 86
     },
     "postgres": {
       "status": "passing",
-      "total": 770,
-      "passed": 681,
+      "total": 1001,
+      "passed": 848,
       "failed": 0,
-      "skipped": 89,
+      "skipped": 153,
       "frameworks": {
+        "astro": {
+          "total": 77,
+          "passed": 66,
+          "failed": 0
+        },
         "express": {
           "total": 77,
-          "passed": 68,
+          "passed": 66,
           "failed": 0
         },
         "fastify": {
           "total": 77,
-          "passed": 68,
+          "passed": 66,
           "failed": 0
         },
         "hono": {
           "total": 77,
-          "passed": 68,
+          "passed": 66,
           "failed": 0
         },
         "nextjs-turbopack": {
-          "total": 77,
-          "passed": 74,
+          "total": 154,
+          "passed": 127,
           "failed": 0
         },
         "nextjs-webpack": {
           "total": 154,
-          "passed": 131,
+          "passed": 127,
           "failed": 0
         },
         "nitro": {
           "total": 77,
-          "passed": 68,
+          "passed": 66,
           "failed": 0
         },
         "nuxt": {
           "total": 77,
-          "passed": 68,
+          "passed": 66,
+          "failed": 0
+        },
+        "sveltekit": {
+          "total": 77,
+          "passed": 66,
           "failed": 0
         },
         "vite": {
           "total": 77,
-          "passed": 68,
+          "passed": 66,
           "failed": 0
         }
       },
-      "progress": 88
+      "progress": 85
     }
   }
 }
