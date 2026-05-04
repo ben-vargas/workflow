@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-05-04T04:14:27.572Z",
-  "commit": "82026638579a4eb57e68c1faf9a5214fd1e6c5b9",
+  "lastUpdated": "2026-05-04T10:19:54.027Z",
+  "commit": "9d94cf45cc89a629a513a9cb2e4ef8f1a794d5d1",
   "branch": "main",
   "type": "e2e",
   "worlds": {
@@ -65,10 +65,10 @@
       "progress": 93
     },
     "postgres": {
-      "status": "passing",
+      "status": "partial",
       "total": 1372,
-      "passed": 1274,
-      "failed": 0,
+      "passed": 1272,
+      "failed": 2,
       "skipped": 98,
       "frameworks": {
         "astro": {
@@ -113,8 +113,8 @@
         },
         "sveltekit": {
           "total": 98,
-          "passed": 92,
-          "failed": 0
+          "passed": 90,
+          "failed": 2
         },
         "vite": {
           "total": 98,
