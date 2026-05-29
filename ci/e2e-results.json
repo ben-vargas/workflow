@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-05-29T05:00:27.878Z",
-  "commit": "4b5f017635b28ff164047bce8ccf4a5981748704",
+  "lastUpdated": "2026-05-29T16:52:55.164Z",
+  "commit": "d7f7c69719d4451c58e41edd36a9fb69bcab4295",
   "branch": "main",
   "type": "e2e",
   "worlds": {
@@ -23,8 +23,8 @@
         },
         "fastify": {
           "total": 270,
-          "passed": 218,
-          "failed": 0
+          "passed": 217,
+          "failed": 1
         },
         "hono": {
           "total": 270,
@@ -43,8 +43,8 @@
         },
         "nitro": {
           "total": 270,
-          "passed": 217,
-          "failed": 1
+          "passed": 218,
+          "failed": 0
         },
         "nuxt": {
           "total": 270,
