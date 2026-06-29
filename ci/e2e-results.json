@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-06-29T04:14:04.508Z",
-  "commit": "d1a040c9ed257033afd8682e4724f4d4cceda820",
+  "lastUpdated": "2026-06-29T22:03:34.300Z",
+  "commit": "24f370773d1d64b8383eb07537a01d63a7ad37db",
   "branch": "main",
   "type": "e2e",
   "worlds": {
@@ -66,10 +66,10 @@
     },
     "postgres": {
       "status": "passing",
-      "total": 2128,
-      "passed": 1845,
+      "total": 1976,
+      "passed": 1719,
       "failed": 0,
-      "skipped": 283,
+      "skipped": 257,
       "frameworks": {
         "astro": {
           "total": 152,
