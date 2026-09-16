@@ -1,5 +1,67 @@
 # @workflow/errors
 
+## 5.0.0
+
+### Major Changes
+
+- [#1217](https://github.com/vercel/workflow/pull/1217) [`e55c636`](https://github.com/vercel/workflow/commit/e55c63678b15b6687cc77efca705ee9fb40fabc3) Thanks [@pranaygp](https://github.com/pranaygp)! - Initial v5 beta release
+
+- [#1851](https://github.com/vercel/workflow/pull/1851) [`5f22832`](https://github.com/vercel/workflow/commit/5f228326757f7da349edfed89845bd109c98f104) Thanks [@TooTallNate](https://github.com/TooTallNate)! - **BREAKING CHANGE**: Run and step errors are now serialized through the workflow serialization pipeline, preserving original class identity and cause chains on `WorkflowRunFailedError.cause`. Pre-upgrade failed runs in the `world-postgres` legacy `error` text column surface as `error: undefined` on read; the original payload is still readable directly from the `errorJson` column for manual inspection.
+
+### Minor Changes
+
+- [#3943](https://github.com/vercel/workflow/pull/3943) [`fbfb9fe`](https://github.com/vercel/workflow/commit/fbfb9fe869980d1ccc351ba594be0ae847165762) Thanks [@karthikscale3](https://github.com/karthikscale3)! - Validate `world.analytics` arguments up front: an invalid id, an out-of-range page limit, an oversized attribute filter, or a half-open `startTime`/`endTime` window now throws a `WorkflowWorldError` with `code: 'INVALID_ARGUMENT'` and `field` set to the offending parameter, instead of failing the request. The message names the method, the parameter, and what it received. Adds `ANALYTICS_RUN_SCOPED_PAGE_LIMIT`, `ANALYTICS_PAGE_LIMIT` and `ANALYTICS_MAX_ATTRIBUTE_FILTERS`.
+  
+  Deprecate `analytics.events.listByCorrelationId()` in favour of `analytics.events.list({ runId, correlationId })`.
+  
+  Fix `analytics.attributes.list()` timestamps being shifted by the local UTC offset.
+
+- [#3145](https://github.com/vercel/workflow/pull/3145) [`1471f25`](https://github.com/vercel/workflow/commit/1471f252fa18024695f1bf149f5bee4876ab149e) Thanks [@VaguelySerious](https://github.com/VaguelySerious)! - Strengthen the event-creation precondition guard: replay-context writes now also send the number of loaded events, so a snapshot that is missing an event is rejected instead of committing a divergent event log, and a rejection restarts the replay in-process (consuming the events a world may attach to the rejection) rather than re-committing the rejected payload or re-invoking over the queue. `@workflow/world-local` and `@workflow/world-postgres` do not implement the check.
+
+- [#2266](https://github.com/vercel/workflow/pull/2266) [`a00d169`](https://github.com/vercel/workflow/commit/a00d16947085f8e94cf191c4d8850121cf201a94) Thanks [@VaguelySerious](https://github.com/VaguelySerious)! - Add an opt-in optimistic-concurrency guard for event creation (`WORKFLOW_PRECONDITION_GUARD=1`): replay-context event creations send a `stateUpdatedAt` snapshot timestamp, and the runtime reloads the event log and retries (then falls back to a queue re-invocation) when the backend reports a newer out-of-band event with a 412 `PreconditionFailedError`.
+
+- [#2960](https://github.com/vercel/workflow/pull/2960) [`79e4c04`](https://github.com/vercel/workflow/commit/79e4c044091185e68bbdcc254a86133e54956ad3) Thanks [@alangenfeld](https://github.com/alangenfeld)! - Re-route a queue delivery that reaches a deployment other than the one its run is pinned to, retry transient publishing failures through normal queue redelivery, and fail the run with the new `DEPLOYMENT_MISMATCH` error code once the recovery budget is spent.
+
+- [#3787](https://github.com/vercel/workflow/pull/3787) [`61fb1f9`](https://github.com/vercel/workflow/commit/61fb1f93bd914ae6f62e6f7926f9b9ea37a870dd) Thanks [@VaguelySerious](https://github.com/VaguelySerious)! - Add an `experimental_retention` option to `start()`: `experimental_retention: 0` asks the World to delete the run's user data as soon as the run completes or fails, while keeping the run itself listable. Implemented on the Vercel, Postgres and Local Worlds. Reading a run whose data has expired now throws `RunExpiredError` instead of resolving to a placeholder.
+
+- [#3850](https://github.com/vercel/workflow/pull/3850) [`fe2fd8c`](https://github.com/vercel/workflow/commit/fe2fd8c457fd2abfb7281f5318486bf90f603491) Thanks [@alangenfeld](https://github.com/alangenfeld)! - Add a catchable `StreamError` and classify Workflow stream infrastructure failures as `STREAM_ERROR` instead of `USER_ERROR`.
+
+### Patch Changes
+
+- [#2012](https://github.com/vercel/workflow/pull/2012) [`9d2a926`](https://github.com/vercel/workflow/commit/9d2a9261fd9355b8e8f41342dd8b81b272162837) Thanks [@pranaygp](https://github.com/pranaygp)! - Expose the active run ID on hook token conflict errors.
+
+- [#2046](https://github.com/vercel/workflow/pull/2046) [`ad71b58`](https://github.com/vercel/workflow/commit/ad71b58bba65e739fbafee0440ffff48878e7e51) Thanks [@pranaygp](https://github.com/pranaygp)! - Report corrupted event logs with a distinct `CorruptedEventLogError` type and `CORRUPTED_EVENT_LOG` run error code.
+
+- [#1915](https://github.com/vercel/workflow/pull/1915) [`540a2ef`](https://github.com/vercel/workflow/commit/540a2efb99c137b0d60c7368376e9533ea662a4c) Thanks [@VaguelySerious](https://github.com/VaguelySerious)! - Replace the `chalk` import in `@workflow/errors/ansi` with a tiny inline ANSI shim. `@workflow/errors/ansi` is reachable from the workflow-VM bundle (via `@workflow/core/workflow` → `context-errors` → `context-violation-error` → here), and `chalk` pulls in `supports-color`, which calls `require('os')` at module load — crashing every workflow with `ReferenceError: require is not defined` in the sandboxed VM.
+
+- [#2986](https://github.com/vercel/workflow/pull/2986) [`fe12b84`](https://github.com/vercel/workflow/commit/fe12b847291912cf9e47143ee10c73828dbdf1a1) Thanks [@shalabhc](https://github.com/shalabhc)! - Enforce a server-supplied per-run event limit (default 25K)
+
+- [#1769](https://github.com/vercel/workflow/pull/1769) [`5a42964`](https://github.com/vercel/workflow/commit/5a4296412f151c255a8d08c8870e511222c7c472) Thanks [@tomdale](https://github.com/tomdale)! - Embed source content in published sourcemaps.
+
+- [#1849](https://github.com/vercel/workflow/pull/1849) [`1203dae`](https://github.com/vercel/workflow/commit/1203dae70c802eef114909e9476e19ec528550cd) Thanks [@pranaygp](https://github.com/pranaygp)! - Friendlier workflow error messages. New `SerializationError`, `WorkflowBuildError`, and structured context-violation classes (e.g. `NotInWorkflowContextError`) with actionable hints and docs links applied to user-facing throw sites; `FatalError.is()` recognizes any error with `fatal: true` so context violations and serialization failures now fail fast instead of burning retry attempts. Runtime logs are namespaced under `[workflow-sdk]` and gain `errorAttribution` (`user` vs `sdk`) plus class-aware hints
+
+- [#2946](https://github.com/vercel/workflow/pull/2946) [`eb8fdb9`](https://github.com/vercel/workflow/commit/eb8fdb979748f54a94289530ee7ac155feddddcc) Thanks [@VaguelySerious](https://github.com/VaguelySerious)! - The `WORKFLOW_PRECONDITION_GUARD` event-creation guard is now on by default; opt out with `WORKFLOW_PRECONDITION_GUARD=0`.
+
+- [#1849](https://github.com/vercel/workflow/pull/1849) [`1203dae`](https://github.com/vercel/workflow/commit/1203dae70c802eef114909e9476e19ec528550cd) Thanks [@pranaygp](https://github.com/pranaygp)! - Replace `util.inspect`'s default object dump for runtime structured-log metadata with an opinionated, workflow-aware formatter. The runtime logger uses color-coded metadata blocks.
+
+- [#1759](https://github.com/vercel/workflow/pull/1759) [`173756d`](https://github.com/vercel/workflow/commit/173756dc4d097fd90432e2c38c91ce1b959a6352) Thanks [@TooTallNate](https://github.com/TooTallNate)! - Rename `useworkflow.dev` URLs to `workflow-sdk.dev`
+
+- [#2212](https://github.com/vercel/workflow/pull/2212) [`2a3b11b`](https://github.com/vercel/workflow/commit/2a3b11bcb408f1aa071b0e37f0b2df614052acd1) Thanks [@pranaygp](https://github.com/pranaygp)! - Retry transient workflow replay divergence before classifying repeated divergence as a corrupted event log.
+
+- [#3061](https://github.com/vercel/workflow/pull/3061) [`62d570e`](https://github.com/vercel/workflow/commit/62d570ed4bf38db333ae9fe9ba513c0d6a9d6b91) Thanks [@NathanColosimo](https://github.com/NathanColosimo)! - Remove the retired step route runtime and make queue health checks target the combined flow handler.
+
+- [#2145](https://github.com/vercel/workflow/pull/2145) [`8d0928b`](https://github.com/vercel/workflow/commit/8d0928b2a2ce61b6c05cb8930d29f176b3a83970) Thanks [@TooTallNate](https://github.com/TooTallNate)! - Classify SDK-level AES-GCM encryption failures as `RUNTIME_ERROR` instead of `USER_ERROR` via a new `RuntimeDecryptionError`.
+
+- [#2060](https://github.com/vercel/workflow/pull/2060) [`1d3959e`](https://github.com/vercel/workflow/commit/1d3959eaa8db5866d08ad3970324c1b5dae73f7b) Thanks [@pranaygp](https://github.com/pranaygp)! - Record fatal world response contract failures as non-retryable workflow errors.
+
+- [#3479](https://github.com/vercel/workflow/pull/3479) [`b589460`](https://github.com/vercel/workflow/commit/b589460ce873bad3ddd7bda4a9bff147ddccac49) Thanks [@VaguelySerious](https://github.com/VaguelySerious)! - Replay-context event writes now always report the log position they replayed from, and the `WORKFLOW_PRECONDITION_GUARD` flag is removed.
+
+- [#3410](https://github.com/vercel/workflow/pull/3410) [`c1a5c74`](https://github.com/vercel/workflow/commit/c1a5c74edb2fad84eb5bbc2036bf73cbd16ca28d) Thanks [@alangenfeld](https://github.com/alangenfeld)! - Surface typed terminal errors when stream retention expires.
+
+- [#1799](https://github.com/vercel/workflow/pull/1799) [`503a929`](https://github.com/vercel/workflow/commit/503a929d347df46eb0ad63b068da7781762d0dc8) Thanks [@TooTallNate](https://github.com/TooTallNate)! - Use inline sourcemaps for all workspace packages; published packages no longer ship external `.js.map` files.
+- Updated dependencies [[`5a42964`](https://github.com/vercel/workflow/commit/5a4296412f151c255a8d08c8870e511222c7c472), [`f6772d9`](https://github.com/vercel/workflow/commit/f6772d95c81038bfa57aa14ea2cca20a07191475), [`1203dae`](https://github.com/vercel/workflow/commit/1203dae70c802eef114909e9476e19ec528550cd), [`f771585`](https://github.com/vercel/workflow/commit/f771585486b3019c8d68211b158dfeffc9e5ebe8), [`239031a`](https://github.com/vercel/workflow/commit/239031ad9e1d27942f8e30a59fd6fef254544fff), [`e55c636`](https://github.com/vercel/workflow/commit/e55c63678b15b6687cc77efca705ee9fb40fabc3), [`926a5e7`](https://github.com/vercel/workflow/commit/926a5e7c6a50c1e74f2e2cc37324caa0f6442d85), [`49276f2`](https://github.com/vercel/workflow/commit/49276f2d0b11d7552ac4504936cbca51df4ce98d), [`ffc5807`](https://github.com/vercel/workflow/commit/ffc58078d0c3cd2786d69bab7e41614566a9ea4e), [`173756d`](https://github.com/vercel/workflow/commit/173756dc4d097fd90432e2c38c91ce1b959a6352), [`62d570e`](https://github.com/vercel/workflow/commit/62d570ed4bf38db333ae9fe9ba513c0d6a9d6b91), [`0f557d5`](https://github.com/vercel/workflow/commit/0f557d5ae4b5ede07fd371988c6d0afda194555d), [`f771585`](https://github.com/vercel/workflow/commit/f771585486b3019c8d68211b158dfeffc9e5ebe8), [`503a929`](https://github.com/vercel/workflow/commit/503a929d347df46eb0ad63b068da7781762d0dc8)]:
+  - @workflow/utils@5.0.0
+
 ## 5.0.0-beta.21
 
 ### Minor Changes
