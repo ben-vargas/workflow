@@ -1,5 +1,19 @@
 # @workflow/cli
 
+## 5.0.0-beta.57
+
+### Patch Changes
+
+- [#4327](https://github.com/vercel/workflow/pull/4327) [`c0aad6d`](https://github.com/vercel/workflow/commit/c0aad6d01b65921a089174ded374bd6a2b515c78) Thanks [@VaguelySerious](https://github.com/VaguelySerious)! - When running `start({ deploymentId })` cross-deploy, stamp the new run with the spec version that the target deployment reports on its capability probe, instead of the caller's own
+- Updated dependencies [[`c0aad6d`](https://github.com/vercel/workflow/commit/c0aad6d01b65921a089174ded374bd6a2b515c78), [`54b48ef`](https://github.com/vercel/workflow/commit/54b48ef4deffb8333de5d8c1dff8e8ad8a791efd), [`ff80d62`](https://github.com/vercel/workflow/commit/ff80d62a59c7bf0f45c4552d7b0cde82beb2ebc4), [`35ebeb4`](https://github.com/vercel/workflow/commit/35ebeb4c5afa263bb37cd870a79c608fa237510a), [`f2daf40`](https://github.com/vercel/workflow/commit/f2daf4023a6a9ddaf91e42aa6409c7e09206f9c6), [`54b48ef`](https://github.com/vercel/workflow/commit/54b48ef4deffb8333de5d8c1dff8e8ad8a791efd), [`bc18326`](https://github.com/vercel/workflow/commit/bc18326bb68974b00e71abac7d39673152d09099), [`2694663`](https://github.com/vercel/workflow/commit/2694663aef5742a012cbfed30a021d67877bb82b), [`548147a`](https://github.com/vercel/workflow/commit/548147ac691a6f6c8114b2b1282208691a7d7e8a), [`12fcca0`](https://github.com/vercel/workflow/commit/12fcca0bcd187269654bcb921a1aa63d91e71ac9)]:
+  - @workflow/core@5.0.0-beta.57
+  - @workflow/world-vercel@5.0.0-beta.52
+  - @workflow/world@5.0.0-beta.39
+  - @workflow/world-local@5.0.0-beta.48
+  - @workflow/errors@5.0.0-beta.24
+  - @workflow/builders@5.0.0-beta.57
+  - @workflow/web@5.0.0-beta.57
+
 ## 5.0.0-beta.56
 
 ### Patch Changes
